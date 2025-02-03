@@ -1,0 +1,32 @@
+package main
+
+import (
+	"log"
+	"net/http"
+	"text/template"
+)
+
+func home(w http.ResponseWriter, r *http.Request) {
+  if r.URL.Path != "/" {
+    http.NotFound(w, r)
+    return
+  }
+
+  files := []string{
+    "ui/html/pages/index.html",
+  }
+
+  ts, err := template.ParseFiles(files...)
+  if err != nil {
+    log.Print(err.Error())
+    http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+    return
+  }
+
+  err = ts.Execute(w, nil)
+  if err != nil {
+    log.Print(err.Error())
+    http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+    return
+  }
+}

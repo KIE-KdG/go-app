@@ -5,17 +5,10 @@ import (
   "net/http"
 )
 
-func home(w http.ResponseWriter, r *http.Request) {
-  if r.URL.Path != "/" {
-    http.NotFound(w, r)
-    return
-  }
-
-  w.Write([]byte("Webserver"))
-}
-
 func main() {
   mux := http.NewServeMux()
+  fileServer := http.FileServer(http.Dir("./ui/static"))
+  mux.Handle("/static/", http.StripPrefix("/static", fileServer))
   mux.HandleFunc("/", home)
 
   log.Print("Starting server on :4000")
