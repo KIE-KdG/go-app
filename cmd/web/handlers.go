@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
-	"text/template"
+	"html/template"
 )
 
 func home(w http.ResponseWriter, r *http.Request) {
