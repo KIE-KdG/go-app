@@ -1,15 +1,18 @@
 package main
 
 import (
-  "log"
-  "net/http"
-  "os"
-  "flag"
+	"flag"
+	"log"
+	"net/http"
+	"os"
+
+	"kdg/be/lab/internal/model"
 )
 
 type application struct {
   errorLog *log.Logger
   infoLog *log.Logger
+  models *model.Models
 }
 
 func main() {
@@ -22,6 +25,7 @@ func main() {
   app := &application{
     errorLog: errorLog,
     infoLog: infoLog,
+    models: &model.Models{},
   }
 
   srv := &http.Server{
@@ -31,6 +35,7 @@ func main() {
   }
 
 	infoLog.Printf("Starting server on %s", *addr)
+  infoLog.Print(app.models.PromptOllama())
   err := srv.ListenAndServe()
   errorLog.Fatal(err)
 }
