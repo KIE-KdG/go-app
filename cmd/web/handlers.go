@@ -1,9 +1,9 @@
 package main
 
 import (
-	"net/http"
+	"encoding/json"
 	"html/template"
-  "encoding/json"
+	"net/http"
 )
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
