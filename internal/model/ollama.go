@@ -3,7 +3,6 @@ package model
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/ollama"
@@ -12,13 +11,14 @@ import (
 type Models struct {
 }
 
-func (*Models)PromptOllama() (string) {
+func (*Models)PromptOllama() (string, error) {
 	llm, err := ollama.New(ollama.WithModel("llama3"))
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	ctx := context.Background()
+
 	completion, err := llm.Call(ctx, "Human: How many r's in strawberry? \nAssistant:",
 		llms.WithTemperature(0.8),
 		llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
@@ -27,8 +27,8 @@ func (*Models)PromptOllama() (string) {
 		}),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
-	return completion
+	return completion, nil
 }

@@ -10,14 +10,31 @@
     const message = messageInput.value.trim();
     if (!message) return;
 
-    // Append the user's message to the chat container.
+    // Append the user's message.
     appendMessage('user', message);
 
-    // Simulate a delay before the LLM response.
-    setTimeout(() => {
-      // Hardcoded LLM response.
-      appendMessage('bot', 'I am on holiday. shush.');
-    }, 500); // Adjust the delay (in ms) as desired.
+    // Send the prompt to the backend.
+    fetch('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ message: message })
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+      return response.json();
+    })
+    .then(data => {
+      // Append the model's response to the chat container.
+      appendMessage('bot', data.response);
+    })
+    .catch(err => {
+      console.error('Error:', err);
+      appendMessage('bot', 'Sorry, there was an error processing your request.');
+    });
 
     // Clear the input field.
     messageInput.value = '';

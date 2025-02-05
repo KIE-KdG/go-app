@@ -35,7 +35,6 @@ func main() {
   }
 
 	infoLog.Printf("Starting server on %s", *addr)
-  infoLog.Print(app.models.PromptOllama())
   err := srv.ListenAndServe()
   errorLog.Fatal(err)
 }
