@@ -48,7 +48,7 @@ func (app *application) chatHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	promptResponse, err := app.models.PromptOllama()
+	promptResponse, err := app.models.PromptOllama(req.Message)
 	if err != nil {
 		app.serverError(w, err)
 		return

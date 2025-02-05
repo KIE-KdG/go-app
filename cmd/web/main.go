@@ -17,6 +17,7 @@ type application struct {
 
 func main() {
   addr := flag.String("addr", ":4000", "HTTP network address")
+  ollama := flag.String("ollama", "llama3", "Ollama model to use")
 	flag.Parse()
 
   infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
@@ -25,7 +26,7 @@ func main() {
   app := &application{
     errorLog: errorLog,
     infoLog: infoLog,
-    models: &model.Models{},
+    models: &model.Models{Model: *ollama},
   }
 
   srv := &http.Server{
