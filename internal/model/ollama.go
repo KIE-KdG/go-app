@@ -12,7 +12,7 @@ type Models struct {
 	Model string
 }
 
-func (m *Models)PromptOllama(prompt string) (string, error) {
+func (m *Models) PromptOllama(prompt string) (string, error) {
 	llm, err := ollama.New(ollama.WithModel(m.Model))
 	if err != nil {
 		return "", err

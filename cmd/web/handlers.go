@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"html/template"
 	"net/http"
+	"os"
 )
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
@@ -57,4 +58,24 @@ func (app *application) chatHandler(w http.ResponseWriter, r *http.Request) {
 	res := ChatResponse{Response: promptResponse}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(res)
+}
+
+func (app *application) geojsonHandler(w http.ResponseWriter, r *http.Request) {
+	file, err := os.Open("data/dummy.geojson")
+	if err != nil {
+		app.notFound(w)
+	}
+	defer file.Close()
+
+	var geojsonData interface{}
+	if err := json.NewDecoder(file).Decode(&geojsonData); err != nil {
+		app.serverError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(geojsonData); err != nil {
+		app.serverError(w, err)
+		return
+	}
 }
