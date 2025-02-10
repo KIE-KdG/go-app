@@ -9,6 +9,7 @@ func (app *application) routes() *http.ServeMux {
   mux.Handle("/static/", http.StripPrefix("/static", fileServer))
 
   mux.HandleFunc("/", app.home)
+	mux.HandleFunc("/map", app.mapView)
 	mux.HandleFunc("/api/chat", app.chatHandler)
 	mux.HandleFunc("/api/geojson", app.geojsonHandler)
 

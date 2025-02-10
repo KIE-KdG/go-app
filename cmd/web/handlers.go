@@ -29,6 +29,34 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
   }
 }
 
+func (app *application) mapView(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/map" {
+		app.notFound(w)
+		return
+	}
+
+	file, err := os.Open("data/dummy.geojson")
+	if err != nil {
+		app.notFound(w)
+	}
+	defer file.Close()
+
+	files := []string{
+		file.Name(),
+	}
+
+	ts, err := template.ParseFiles(files...)
+	if err != nil {
+		app.serverError(w, err)
+	}
+
+	err = ts.Execute(w, nil)
+	if err != nil {
+		app.serverError(w, err)
+	}
+
+}
+
 type ChatRequest struct {
 	Message string `json:"message"`
 }
