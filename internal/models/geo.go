@@ -11,7 +11,7 @@ type GeoData struct {
 }
 
 func (m *GeoData) Dummy() (map[string]interface{}, error) {
-	file, err := os.Open("data/dummy.geojson")
+	file, err := os.Open("data/iRISExample.json")
 	if err != nil {
 			return nil, err
 	}

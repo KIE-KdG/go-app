@@ -14,9 +14,15 @@
   </style>
 </head>
 <body>
-  <h1>Map</h1>
   <div id="map"></div>
-
+  <div class="card">
+    <h5 class="card-header">Map with geojson</h5>
+    <div class="card-body">
+      <h5 class="card-title">JSON</h5>
+      <pre class="card-text mb-3 overflow-auto" style="height: auto;">{{.GeoData}}</pre>
+      <a href="data:application/json,{{.GeoData | urlquery}}" download="data.json" class="btn btn-primary">Download GeoJSON</a>
+    </div>
+  </div>
 </body>
 </html>
 {{end}}

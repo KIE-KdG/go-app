@@ -14,7 +14,7 @@
     })
     .then(function(geojsonData) {
       // Initialize the Leaflet map inside the div with id "map".
-      var map = L.map('map').setView([51.505, -0.09], 13);
+      const map = L.map('map').setView([50.8999, 4.553], 8);
       
       // Add an OpenStreetMap tile layer.
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
