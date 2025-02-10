@@ -11,7 +11,7 @@ func (app *application) routes() *http.ServeMux {
   mux.HandleFunc("/", app.home)
 	mux.HandleFunc("/map", app.mapView)
 	mux.HandleFunc("/api/chat", app.chatHandler)
-	mux.HandleFunc("/api/geojson", app.geojsonHandler)
+	mux.HandleFunc("/api/geojson", app.geoJsonHandler)
 
 	return mux
 }

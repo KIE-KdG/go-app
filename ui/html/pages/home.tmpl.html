@@ -1,20 +1,12 @@
+{{define "title"}}Home{{end}}
+
 {{define "main"}}
-<!DOCTYPE html>
-<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>LLM Chat</title>
-  <link rel='shortcut icon' href='/static/img/favicon.ico' type='image/x-icon'>
-  <link rel="stylesheet" href="/static/css/style.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js" defer></script>
   <script src="/static/js/script.js" type="text/javascript" defer></script>
 </head>
 <body>
-  <header>
-    <h1>LLM Chat</h1>
-  </header>
-
   <div id="chat-container" class="chat-container">
     <!-- Chat messages will be appended here -->
   </div>
@@ -28,5 +20,4 @@
     </form>
   </footer>
 </body>
-</html>
 {{end}}

@@ -2,31 +2,18 @@ package main
 
 import (
 	"encoding/json"
-	"html/template"
 	"net/http"
-	"os"
 )
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
-  if r.URL.Path != "/" {
-    app.notFound(w)
-    return
-  }
+	if r.URL.Path != "/" {
+		app.notFound(w)
+		return
+	}
 
-  files := []string{
-    "ui/html/pages/index.tmpl.html",
-  }
+	data := app.newTemplateData(r)
 
-  ts, err := template.ParseFiles(files...)
-  if err != nil {
-    app.serverError(w, err)
-    return
-  }
-
-  err = ts.ExecuteTemplate(w, "main", nil)
-  if err != nil {
-    app.serverError(w, err)
-  }
+	app.render(w, http.StatusOK, "home.tmpl.html", data)
 }
 
 func (app *application) mapView(w http.ResponseWriter, r *http.Request) {
@@ -35,26 +22,16 @@ func (app *application) mapView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, err := os.Open("data/dummy.geojson")
+	geoJson, err := app.geoData.Dummy()
 	if err != nil {
 		app.notFound(w)
-	}
-	defer file.Close()
-
-	files := []string{
-		file.Name(),
+		return
 	}
 
-	ts, err := template.ParseFiles(files...)
-	if err != nil {
-		app.serverError(w, err)
-	}
+	data := app.newTemplateData(r)
+	data.GeoData = geoJson
 
-	err = ts.Execute(w, nil)
-	if err != nil {
-		app.serverError(w, err)
-	}
-
+	app.render(w, http.StatusOK, "map.tmpl.html", data)
 }
 
 type ChatRequest struct {
@@ -66,7 +43,7 @@ type ChatResponse struct {
 }
 
 func (app *application) chatHandler(w http.ResponseWriter, r *http.Request) {
-  if r.Method != http.MethodPost {
+	if r.Method != http.MethodPost {
 		app.clientError(w, http.StatusMethodNotAllowed)
 		return
 	}
@@ -88,21 +65,21 @@ func (app *application) chatHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
-func (app *application) geojsonHandler(w http.ResponseWriter, r *http.Request) {
-	file, err := os.Open("data/dummy.geojson")
+func (app *application) geoJsonHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		app.clientError(w, http.StatusMethodNotAllowed)
+		return
+	}
+
+	geoData, err := app.geoData.Dummy()
 	if err != nil {
 		app.notFound(w)
-	}
-	defer file.Close()
-
-	var geojsonData interface{}
-	if err := json.NewDecoder(file).Decode(&geojsonData); err != nil {
-		app.serverError(w, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(geojsonData); err != nil {
+	if err := json.NewEncoder(w).Encode(geoData); err != nil {
 		app.serverError(w, err)
 		return
 	}
