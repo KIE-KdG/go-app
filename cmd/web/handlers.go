@@ -22,14 +22,7 @@ func (app *application) mapView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	geoJson, err := app.geoData.Dummy()
-	if err != nil {
-		app.notFound(w)
-		return
-	}
-
 	data := app.newTemplateData(r)
-	data.GeoData = geoJson
 
 	app.render(w, http.StatusOK, "map.tmpl.html", data)
 }

@@ -1,26 +1,24 @@
 {{define "base"}}
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <title>{{template "title" .}} - LLM Chat</title>
-  <link rel='shortcut icon' href='/static/img/favicon.ico' type='image/x-icon'>
+  <link rel="shortcut icon" href="/static/img/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="/static/css/style.css">
+  {{block "head" .}}{{end}}
 </head>
-
 <body>
   <header>
     <h1><a href='/'>LLM Chat</a></h1>
   </header>
   {{template "nav" .}}
   <main>
-    {{template "main"}}
+    {{block "main" .}}{{end}}
   </main>
   <footer>
     KdG in {{.CurrentYear}}
   </footer>
 </body>
-
 </html>
 {{end}}

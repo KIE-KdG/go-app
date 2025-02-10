@@ -1,12 +1,12 @@
 {{define "title"}}Home{{end}}
 
-{{define "main"}}
-<head>
+{{define "head"}}
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js" defer></script>
-  <script src="/static/js/script.js" type="text/javascript" defer></script>
-</head>
-<body>
+  <script src="/static/js/script.js" defer></script>
+{{end}}
+
+{{define "main"}}
   <div id="chat-container" class="chat-container">
     <!-- Chat messages will be appended here -->
   </div>
@@ -19,5 +19,4 @@
       </div>
     </form>
   </footer>
-</body>
 {{end}}
