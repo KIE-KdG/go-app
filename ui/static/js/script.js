@@ -1,7 +1,8 @@
 (function() {
-  const chatContainer = document.getElementById('chat-container');
   const chatForm = document.getElementById('chat-form');
   const messageInput = document.getElementById('message-input');
+  // This is the element where all messages will be appended.
+  const messages = document.getElementById('messages');
 
   // Handle the form submission.
   chatForm.addEventListener('submit', function(event) {
@@ -49,8 +50,9 @@
     .catch(err => {
       console.error('Error:', err);
       // Remove loading message if still present.
-      if (document.querySelector('.message.bot.loading')) {
-        document.querySelector('.message.bot.loading').remove();
+      const existingLoading = document.querySelector('.messages.bot.loading');
+      if (existingLoading) {
+        existingLoading.remove();
       }
       appendMessage('bot', 'Sorry, there was an error processing your request.');
     });
@@ -59,29 +61,53 @@
     messageInput.value = '';
   });
 
-  // Helper function to append text messages.
+  // Helper function to append text messages as chat bubbles.
   function appendMessage(sender, text) {
-    const messageElem = document.createElement('div');
-    messageElem.classList.add('message', sender);
-    messageElem.textContent = text;
-    chatContainer.appendChild(messageElem);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    // Create a wrapper div using Bootstrap flex utilities for alignment.
+    const wrapper = document.createElement('div');
+    wrapper.classList.add('d-flex', 'mb-2');
+    if (sender === 'user') {
+      wrapper.classList.add('justify-content-end');
+    } else {
+      wrapper.classList.add('justify-content-start');
+    }
+    
+    // Create the bubble element.
+    const bubble = document.createElement('div');
+    bubble.classList.add('p-2', 'rounded');
+    bubble.style.maxWidth = '70%';
+    bubble.textContent = text;
+    
+    // Apply different background classes based on the sender.
+    if (sender === 'user') {
+      bubble.classList.add('bg-primary', 'text-white');
+    } else {
+      bubble.classList.add('bg-light', 'text-dark');
+    }
+    
+    // Append the bubble to the wrapper.
+    wrapper.appendChild(bubble);
+    // Append the wrapper to the messages element.
+    messages.appendChild(wrapper);
+    // Scroll the messages container to the bottom.
+    messages.scrollTop = messages.scrollHeight;
   }
 
   // Helper function to append a loading message that displays "thinking.."
   function appendLoadingMessage(sender) {
     const loadingElem = document.createElement('div');
-    loadingElem.classList.add('message', sender, 'loading');
+    // Using the same styling classes can help you later style these messages differently if needed.
+    loadingElem.classList.add('messages', sender, 'loading');
     loadingElem.textContent = "thinking..";
-    chatContainer.appendChild(loadingElem);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    messages.appendChild(loadingElem);
+    messages.scrollTop = messages.scrollHeight;
     return loadingElem;
   }
 
   // Helper function to append a Leaflet map displaying the GeoJSON.
   function appendMap(sender, geojsonData) {
     const container = document.createElement('div');
-    container.classList.add('message', sender);
+    container.classList.add('messages', sender);
     container.style.width = '300px';
     container.style.height = '300px';
     container.style.marginTop = '10px';
@@ -94,8 +120,8 @@
     mapDiv.style.height = '100%';
     container.appendChild(mapDiv);
     
-    chatContainer.appendChild(container);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    messages.appendChild(container);
+    messages.scrollTop = messages.scrollHeight;
     
     const map = L.map(mapDiv, { attributionControl: false, zoomControl: false })
       .setView([51.505, -0.09], 13);
