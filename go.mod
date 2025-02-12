@@ -2,7 +2,10 @@ module kdg/be/lab
 
 go 1.23.5
 
-require github.com/tmc/langchaingo v0.1.12
+require (
+	github.com/gorilla/websocket v1.5.3
+	github.com/tmc/langchaingo v0.1.12
+)
 
 require (
 	github.com/dlclark/regexp2 v1.10.0 // indirect

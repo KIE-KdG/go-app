@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"github.com/gorilla/websocket"
 )
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
@@ -34,12 +35,28 @@ func (app *application) mapView(w http.ResponseWriter, r *http.Request) {
 	app.render(w, http.StatusOK, "map.tmpl.html", data)
 }
 
+func (app *application) socketView(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/socket" {
+		app.notFound(w)
+		return
+	}
+
+	data := app.newTemplateData(r)
+	
+	app.render(w, http.StatusOK, "socket.tmpl.html", data)
+
+}
+
 type ChatRequest struct {
 	Message string `json:"message"`
 }
 
 type ChatResponse struct {
 	Response string `json:"response"`
+}
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true }, // Allow all connections
 }
 
 func (app *application) chatHandler(w http.ResponseWriter, r *http.Request) {
@@ -82,5 +99,36 @@ func (app *application) geoJsonHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(geoData); err != nil {
 		app.serverError(w, err)
 		return
+	}
+
+
+}
+
+func (app *application) handleConnections(w http.ResponseWriter, r *http.Request) {
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		app.serverError(w, err)
+		return
+	}
+	defer ws.Close()
+
+	for {
+		_, msg, err := ws.ReadMessage()
+		if err != nil {
+			app.errorLog.Println("read error:", err)
+			break
+		}
+		app.infoLog.Printf("Recieved message: %s\n", msg)
+
+		promptResponse, err := app.models.PromptOllama(string(msg))
+		if err != nil {
+			app.serverError(w, err)
+			return
+		}
+
+		if err := ws.WriteMessage(websocket.TextMessage, []byte(promptResponse)); err != nil {
+			app.errorLog.Println("write error:", err)
+			break
+		}
 	}
 }
