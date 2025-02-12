@@ -6,7 +6,22 @@ import (
 	"net/http"
 	"runtime/debug"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		allowedOrigins := []string{"*"} //TODO: change in future to mitigate (CSRF) attack
+		origin := r.Header.Get("Origin")
+		for _, allowedOrigin := range allowedOrigins {
+			if origin == allowedOrigin {
+				return true
+			}
+		}
+		return false
+	},
+}
 
 func (app *application) serverError(w http.ResponseWriter, err error) {
 	trace := fmt.Sprintf("%s\n%s", err.Error(), debug.Stack())
