@@ -1,5 +1,4 @@
 
-let port = document.getElementById("socket-port")
 let socket = new WebSocket("ws://localhost:4000/ws");
 
 socket.onopen = function(event) {
