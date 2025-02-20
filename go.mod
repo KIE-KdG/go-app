@@ -1,10 +1,14 @@
 module kdg/be/lab
 
-go 1.23.5
+go 1.24.0
 
 require (
+	github.com/alexedwards/scs/v2 v2.8.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/tmc/langchaingo v0.1.12
+	github.com/julienschmidt/httprouter v1.3.0
+	github.com/justinas/alice v1.2.0
+	github.com/justinas/nosurf v1.1.1
+	github.com/tmc/langchaingo v0.1.13
 )
 
 require (

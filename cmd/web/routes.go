@@ -1,20 +1,34 @@
 package main
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/julienschmidt/httprouter"
+	"github.com/justinas/alice"
+)
 
 func (app *application) routes() http.Handler {
-	mux := http.NewServeMux()
+
+	router := httprouter.New()
+
+	router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.notFound(w)
+	})
 
 	fileServer := http.FileServer(http.Dir("./ui/static"))
-  mux.Handle("/static/", http.StripPrefix("/static", fileServer))
+	router.Handler(http.MethodGet, "/static/*filepath", http.StripPrefix("/static", fileServer))
 
-  mux.HandleFunc("/", app.home)
-	mux.HandleFunc("/map", app.mapView)
-	mux.HandleFunc("/socket", app.socketView)
-	mux.HandleFunc("/api/chat", app.chatHandler)
-	mux.HandleFunc("/api/geojson", app.geoJsonHandler)
+	dynamic := alice.New(app.sessionManager.LoadAndSave)
 
-	mux.HandleFunc("/ws", app.handleConnections)
+  router.Handler(http.MethodGet, "/", dynamic.ThenFunc(app.home))
+	router.Handler(http.MethodGet, "/map", dynamic.ThenFunc(app.mapView))
+	router.Handler(http.MethodGet, "/socket", dynamic.ThenFunc(app.socketView))
+	router.Handler(http.MethodPost, "/api/chat", dynamic.ThenFunc(app.chatHandler))
+	router.Handler(http.MethodPost, "/api/geojson", dynamic.ThenFunc(app.geoJsonHandler))
 
-	return app.logRequest(mux)
+	router.Handler(http.MethodGet, "/ws", dynamic.ThenFunc(app.handleConnections))
+
+	standard := alice.New(app.recoverPanic, app.logRequest)
+
+	return standard.Then(router)
 }

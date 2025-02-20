@@ -1,0 +1,16 @@
+{
+  "dependencies": {
+    "@tailwindcss/cli": "^4.0.7",
+    "tailwindcss": "^4.0.7"
+  },
+  "scripts": {
+    "dev:build": "tailwindcss -i ./ui/static/css/input.css -o ./ui/static/css/output.css",
+    "dev:tailwind": "tailwindcss -i ./ui/static/css/input.css -o ./ui/static/css/output.css --watch",
+    "dev:browser": "browser-sync start --proxy 'localhost:8080' --files 'public/**/*.*'",
+    "dev": "concurrently \"air\" \"npm run dev:tailwind\" \"npm run dev:browser\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "daisyui": "^4.12.23"
+  }
+}
