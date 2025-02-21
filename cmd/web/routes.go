@@ -20,13 +20,20 @@ func (app *application) routes() http.Handler {
 
 	dynamic := alice.New(app.sessionManager.LoadAndSave)
 
-  router.Handler(http.MethodGet, "/", dynamic.ThenFunc(app.home))
-	router.Handler(http.MethodGet, "/map", dynamic.ThenFunc(app.mapView))
-	router.Handler(http.MethodGet, "/socket", dynamic.ThenFunc(app.socketView))
-	router.Handler(http.MethodPost, "/api/chat", dynamic.ThenFunc(app.chatHandler))
-	router.Handler(http.MethodPost, "/api/geojson", dynamic.ThenFunc(app.geoJsonHandler))
+	router.Handler(http.MethodGet, "/user/login", dynamic.ThenFunc(app.userLogin))
+	router.Handler(http.MethodPost, "/user/login", dynamic.ThenFunc(app.userLoginPost))
+	router.Handler(http.MethodGet, "/user/signup", dynamic.ThenFunc(app.userSignup))
+	router.Handler(http.MethodPost, "/user/signup", dynamic.ThenFunc(app.userSignupPost))
 
-	router.Handler(http.MethodGet, "/ws", dynamic.ThenFunc(app.handleConnections))
+	protected := dynamic.Append(app.requireAuthentication)
+
+  router.Handler(http.MethodGet, "/", protected.ThenFunc(app.home))
+	router.Handler(http.MethodGet, "/map", protected.ThenFunc(app.mapView))
+	router.Handler(http.MethodGet, "/socket", protected.ThenFunc(app.socketView))
+	router.Handler(http.MethodPost, "/api/chat", protected.ThenFunc(app.chatHandler))
+	router.Handler(http.MethodPost, "/api/geojson", protected.ThenFunc(app.geoJsonHandler))
+
+	router.Handler(http.MethodGet, "/ws", protected.ThenFunc(app.handleConnections))
 
 	standard := alice.New(app.recoverPanic, app.logRequest)
 

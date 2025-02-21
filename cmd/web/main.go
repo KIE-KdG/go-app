@@ -13,6 +13,8 @@ import (
 	"kdg/be/lab/internal/models"
 
 	"github.com/alexedwards/scs/v2"
+	"github.com/alexedwards/scs/v2/memstore"
+  "github.com/go-playground/form/v4" 
 )
 
 type application struct {
@@ -20,7 +22,9 @@ type application struct {
   infoLog *log.Logger
   models *model.Models
   geoData *models.GeoData
+  users *models.UserModel
   templateCache map[string]*template.Template
+  formDecoder *form.Decoder
   sessionManager *scs.SessionManager
 }
 
@@ -37,7 +41,10 @@ func main() {
     errorLog.Fatal(err)
   }
 
+  formDecoder := form.NewDecoder()
+
   sessionManager := scs.New()
+  sessionManager.Store = memstore.New()
   sessionManager.Lifetime = 12 * time.Hour
   sessionManager.Cookie.Secure = true
 
@@ -47,6 +54,7 @@ func main() {
     models: &model.Models{Model: *ollama},
     geoData: &models.GeoData{} ,
     templateCache: templateCache,
+    formDecoder: formDecoder,
     sessionManager: sessionManager,
   }
 
