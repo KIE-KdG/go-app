@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"database/sql"
 	"flag"
 	"html/template"
 	"log"
@@ -13,8 +14,9 @@ import (
 	"kdg/be/lab/internal/models"
 
 	"github.com/alexedwards/scs/v2"
-	"github.com/alexedwards/scs/v2/memstore"
-  "github.com/go-playground/form/v4" 
+	"github.com/alexedwards/scs/sqlite3store"
+  _ "github.com/mattn/go-sqlite3"
+	"github.com/go-playground/form/v4"
 )
 
 type application struct {
@@ -31,10 +33,17 @@ type application struct {
 func main() {
   addr := flag.String("addr", ":4000", "HTTP network address")
   ollama := flag.String("ollama", "llama3", "Ollama model to use")
+  dsn := flag.String("dsn", "data/sqlite_lab.db", "sqlite data source name")
 	flag.Parse()
 
   infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
 	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+
+  db, err := openDB(*dsn)
+  if err != nil {
+    errorLog.Fatal(err)
+  }
+  defer db.Close()
 
   templateCache, err := newTemplateCache()
   if err != nil {
@@ -44,7 +53,7 @@ func main() {
   formDecoder := form.NewDecoder()
 
   sessionManager := scs.New()
-  sessionManager.Store = memstore.New()
+  sessionManager.Store = sqlite3store.New(db)
   sessionManager.Lifetime = 12 * time.Hour
   sessionManager.Cookie.Secure = true
 
@@ -53,6 +62,7 @@ func main() {
     infoLog: infoLog,
     models: &model.Models{Model: *ollama},
     geoData: &models.GeoData{} ,
+    users: &models.UserModel{DB: db},
     templateCache: templateCache,
     formDecoder: formDecoder,
     sessionManager: sessionManager,
@@ -76,4 +86,17 @@ func main() {
   infoLog.Printf("Using ollama model: %s", *ollama)
   err = srv.ListenAndServeTLS("./tls/cert.pem", "./tls/key.pem")
   errorLog.Fatal(err)
+}
+
+func openDB(dsn string) (*sql.DB, error) {
+  db, err := sql.Open("sqlite3", dsn)
+  if err != nil {
+    return nil, err
+  }
+
+  if err := db.Ping(); err != nil {
+    return nil, err
+  }
+
+  return db, nil
 }

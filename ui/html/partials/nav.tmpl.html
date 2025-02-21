@@ -10,6 +10,17 @@
       <div class="md:flex space-x-4">
         <a href="/" class="rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Chat</a>
         <a href="/map" class="rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Map</a>
+        <div>
+          {{if .IsAuthenticated}}
+          <form action='/user/logout' method='POST'>
+            <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
+            <button>Logout</button>
+          </form>
+          {{else}}
+          <a href='/user/signup'>Signup</a>
+          <a href='/user/login'>Login</a>
+          {{end}}
+        </div>
         <input
         type="checkbox"
         value="dark"

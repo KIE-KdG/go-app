@@ -5,6 +5,6 @@ module.exports = {
     require('daisyui'),
   ],
   daisyui: {
-    themes: ["cyberpunk", "cupcake"],
+    themes: ["dark", "cupcake"],
   },
 }
