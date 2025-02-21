@@ -1,14 +1,22 @@
 package main
 
 import (
+	"crypto/tls"
+	"database/sql"
 	"flag"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"kdg/be/lab/internal/model"
-  "kdg/be/lab/internal/models"
+	"kdg/be/lab/internal/models"
+
+	"github.com/alexedwards/scs/v2"
+	"github.com/alexedwards/scs/sqlite3store"
+  _ "github.com/mattn/go-sqlite3"
+	"github.com/go-playground/form/v4"
 )
 
 type application struct {
@@ -16,38 +24,79 @@ type application struct {
   infoLog *log.Logger
   models *model.Models
   geoData *models.GeoData
+  users *models.UserModel
   templateCache map[string]*template.Template
+  formDecoder *form.Decoder
+  sessionManager *scs.SessionManager
 }
 
 func main() {
   addr := flag.String("addr", ":4000", "HTTP network address")
   ollama := flag.String("ollama", "llama3", "Ollama model to use")
+  dsn := flag.String("dsn", "data/sqlite_lab.db", "sqlite data source name")
 	flag.Parse()
 
   infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
 	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+
+  db, err := openDB(*dsn)
+  if err != nil {
+    errorLog.Fatal(err)
+  }
+  defer db.Close()
 
   templateCache, err := newTemplateCache()
   if err != nil {
     errorLog.Fatal(err)
   }
 
+  formDecoder := form.NewDecoder()
+
+  sessionManager := scs.New()
+  sessionManager.Store = sqlite3store.New(db)
+  sessionManager.Lifetime = 12 * time.Hour
+  sessionManager.Cookie.Secure = true
+
   app := &application{
     errorLog: errorLog,
     infoLog: infoLog,
     models: &model.Models{Model: *ollama},
     geoData: &models.GeoData{} ,
+    users: &models.UserModel{DB: db},
     templateCache: templateCache,
+    formDecoder: formDecoder,
+    sessionManager: sessionManager,
+  }
+
+  tlsConfig := &tls.Config{
+    CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256},
   }
 
   srv := &http.Server{
     Addr: *addr,
     ErrorLog: errorLog,
     Handler: app.routes(),
+    TLSConfig: tlsConfig,
+    IdleTimeout: time.Minute,
+    ReadTimeout: 5 * time.Second,
+    WriteTimeout: 10 * time.Second,
   }
 
 	infoLog.Printf("Starting server on %s", *addr)
   infoLog.Printf("Using ollama model: %s", *ollama)
-  err = srv.ListenAndServe()
+  err = srv.ListenAndServeTLS("./tls/cert.pem", "./tls/key.pem")
   errorLog.Fatal(err)
+}
+
+func openDB(dsn string) (*sql.DB, error) {
+  db, err := sql.Open("sqlite3", dsn)
+  if err != nil {
+    return nil, err
+  }
+
+  if err := db.Ping(); err != nil {
+    return nil, err
+  }
+
+  return db, nil
 }
