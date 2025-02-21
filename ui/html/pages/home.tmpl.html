@@ -1,13 +1,83 @@
 {{define "title"}}Home{{end}}
-
-{{define "head"}}
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js" defer></script>
-  <script src="/static/js/script.js" defer></script>
-{{end}}
-
 {{define "main"}}
+<body class="bg-gray-100 dark:bg-gray-900 flex items-center justify-center min-h-screen">
+  <div x-data="chatApp()" x-init="init()" class="w-full max-w-lg bg-white dark:bg-gray-800 dark:text-white shadow-md rounded-lg p-6 container mx-auto flex flex-col">
+    <!-- Chat Header -->
+    <h2 class="text-2xl font-bold mb-2 dark:text-white">Chatbot</h2>
+    <p class="text-sm text-gray-600 mb-4 dark:text-gray-300">Powered by Ollama</p>
+    <!-- Chat Messages Container -->
+    <div id="chatMessages" class="overflow-y-auto h-64 border p-4 mb-4 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+      <template x-for="(message, index) in messages" :key="index">
+        <div :class="message.sender === 'You' ? 'chat chat-end' : 'chat chat-start'">
+          <strong x-text="message.sender" ></strong>: <span x-text="message.text"></span>
+        </div>
+      </template>
+    </div>
+    <!-- Chat Input Form -->
+    <form @submit.prevent="sendMessage">
+      <input type="text" id="messageInput" x-model="inputMessage" placeholder="Type your message"
+             class="w-full border rounded p-2 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:text-white dark:border-gray-600">
+      <button type="submit" id="sendButton" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+        Send
+      </button>
+    </form>
+  </div>
 
-{{template "chat"}}
-
+  <script>
+    function chatApp() {
+      return {
+        ws: null,
+        inputMessage: '',
+        messages: [],
+        init() {
+          // Establish a WebSocket connection to ws://localhost:4000
+          this.ws = new WebSocket('wss://localhost:4000/ws');
+          this.ws.addEventListener('open', () => {
+            console.log('WebSocket connection established');
+          });
+          this.ws.addEventListener('message', (event) => {
+            console.log('Received:', event.data);
+            let data;
+            try {
+              data = JSON.parse(event.data);
+            } catch (e) {
+              data = { response: event.data };
+            }
+            this.messages.push({
+              sender: 'AI',
+              text: data.response || event.data
+            });
+            // Ensure the chat messages container scrolls to the bottom
+            this.$nextTick(() => {
+              const chatMessages = document.getElementById('chatMessages');
+              chatMessages.scrollTop = chatMessages.scrollHeight;
+            });
+          });
+          this.ws.addEventListener('close', () => {
+            console.log('WebSocket connection closed');
+          });
+          this.ws.addEventListener('error', (error) => {
+            console.error('WebSocket error:', error);
+          });
+        },
+        sendMessage() {
+          if (!this.inputMessage.trim()) return;
+          // Add user's message to the chat
+          this.messages.push({
+            sender: 'You',
+            text: this.inputMessage
+          });
+          // Send the message to the server via WebSocket in JSON format
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ message: this.inputMessage }));
+          } else {
+            console.error('WebSocket is not open');
+          }
+          // Clear the input field
+          this.inputMessage = '';
+        }
+      }
+    }
+  </script>
+</body>
 {{end}}

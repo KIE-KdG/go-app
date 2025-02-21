@@ -6,8 +6,11 @@ import (
 	"net/http"
 	"runtime/debug"
 	"time"
+	"errors"
 
 	"github.com/gorilla/websocket"
+	"github.com/go-playground/form/v4"
+
 )
 
 var upgrader = websocket.Upgrader{
@@ -54,4 +57,28 @@ func (app *application) render(w http.ResponseWriter, status int, page string, d
 	w.WriteHeader(status)
 
 	buf.WriteTo(w)
+}
+
+func (app *application) decodePostForm(r *http.Request, dst any) error {
+	err := r.ParseForm()
+	if err != nil {
+		return err
+	}
+
+	err = app.formDecoder.Decode(dst, r.PostForm)
+	if err != nil {
+		var invalidDecoderError *form.InvalidDecoderError
+
+		if errors.As(err, &invalidDecoderError) {
+			panic(err)
+		}
+
+		return err
+	}
+
+	return nil 
+}
+
+func (app *application) isAuthenticated(r *http.Request) bool {
+	return app.sessionManager.Exists(r.Context(), "authenticatedUserID")
 }
