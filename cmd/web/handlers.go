@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -246,16 +244,37 @@ func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) adminPanel(w http.ResponseWriter, r *http.Request) {
 	data := app.newTemplateData(r)
+	data.Form = adminPanelForm{}
 	app.render(w, http.StatusOK, "admin.tmpl.html", data)
 }
 
+type adminPanelForm struct {
+	Chunk               bool   `form:"chunk"`
+	ChunkMethod         string `form:"chunkMethod"`
+	ChunkCount          string `form:"chunkCount"`
+	validator.Validator `form:"-"`
+}
+
 func (app *application) uploadPost(w http.ResponseWriter, r *http.Request) {
+	var form adminPanelForm
+
+	if err := app.decodePostForm(r, &form); err != nil {
+		app.clientError(w, http.StatusBadRequest)
+		return
+	}
+
 	r.ParseMultipartForm(10 << 20)
+
+	if !form.Valid() {
+		data := app.newTemplateData(r)
+		data.Form = form
+		app.render(w, http.StatusUnprocessableEntity, "admin.tmpl.html", data)
+		return
+	}
 
 	file, handler, err := r.FormFile("myFile")
 	if err != nil {
-		fmt.Println("Error Retrieving the File")
-		fmt.Println(err)
+		app.clientError(w, http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
@@ -263,19 +282,7 @@ func (app *application) uploadPost(w http.ResponseWriter, r *http.Request) {
 	app.infoLog.Printf("Uploaded File: %+v\n", handler.Filename)
 	app.infoLog.Printf("File Size: %+v\n", handler.Size)
 	app.infoLog.Printf("MIME Header: %+v\n", handler.Header)
-
-	tempFile, err := ioutil.TempFile("data", "upload-*.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer tempFile.Close()
-
-	fileBytes, err := ioutil.ReadAll(file)
-	if err != nil {
-		fmt.Println(err)
-	}
-	// write this byte array to our temporary file
-	tempFile.Write(fileBytes)
+	app.infoLog.Printf("Form: %+v\n", form)
 
 	http.Redirect(w, r, "/panel", http.StatusSeeOther)
 }

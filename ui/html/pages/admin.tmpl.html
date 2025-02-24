@@ -3,12 +3,61 @@
 
 <body>
   <div>
-    <p>Manager the chat bot</p>
+    <h1>Manage the chat bot</h1>
     <form enctype="multipart/form-data" action="/api/upload" method="post">
       <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
-      <input type="file" name="myFile" />
-      <input type="submit" value="upload" />
+
+      <label for="myFile">Choose a file:</label>
+      <input type="file" name="myFile" required />
+
+      <br><br>
+      
+      <input type="checkbox" id="chunk" name="chunk" value="true" onchange="toggleChunkOptions()">
+      <label for="chunk">Enable Chunking</label>
+
+      <div id="chunkOptions" style="display: none;">
+        <p>Select chunking method:</p>
+
+        <input type="radio" id="chunkBySize" name="chunkMethod" value="size" onclick="toggleChunkInputs()">
+        <label for="chunkBySize">Chunk by size (bytes)</label>
+        <input type="number" id="chunkSize" name="chunkSize" min="1" style="display: none;" />
+
+        <br>
+
+        <input type="radio" id="chunkByCount" name="chunkMethod" value="count" onclick="toggleChunkInputs()">
+        <label for="chunkByCount">Chunk by count</label>
+        <input type="number" id="chunkCount" name="chunkCount" min="1" style="display: none;" />
+      </div>
+
+      <br>
+      <input type="submit" value="Upload" />
     </form>
   </div>
+
+  <script>
+    function toggleChunkOptions() {
+      const chunkCheckbox = document.getElementById("chunk");
+      const chunkOptions = document.getElementById("chunkOptions");
+      chunkOptions.style.display = chunkCheckbox.checked ? "block" : "none";
+    }
+
+    function toggleChunkInputs() {
+      const chunkBySize = document.getElementById("chunkBySize");
+      const chunkByCount = document.getElementById("chunkByCount");
+      const chunkSize = document.getElementById("chunkSize");
+      const chunkCount = document.getElementById("chunkCount");
+
+      if (chunkBySize.checked) {
+        chunkSize.style.display = "inline";
+        chunkCount.style.display = "none";
+        chunkCount.value = ""; // Clear the other input
+      } else if (chunkByCount.checked) {
+        chunkSize.style.display = "none";
+        chunkCount.style.display = "inline";
+        chunkSize.value = ""; // Clear the other input
+      }
+    }
+  </script>
 </body>
+
 {{end}}
