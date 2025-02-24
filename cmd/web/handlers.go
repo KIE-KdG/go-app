@@ -2,12 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/gorilla/websocket"
-	"net/http"
 	"errors"
+	"net/http"
 
-	"kdg/be/lab/internal/validator"
+	"github.com/gorilla/websocket"
+
 	"kdg/be/lab/internal/models"
+	"kdg/be/lab/internal/validator"
 )
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
@@ -239,4 +240,9 @@ func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
 	app.sessionManager.Put(r.Context(), "authenticatedUserID", id)
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (app *application) adminPanel(w http.ResponseWriter, r *http.Request) {
+	data := app.newTemplateData(r)
+	app.render(w, http.StatusOK, "admin.tmpl.html", data)
 }

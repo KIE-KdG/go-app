@@ -32,8 +32,11 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodGet, "/socket", protected.ThenFunc(app.socketView))
 	router.Handler(http.MethodPost, "/api/chat", protected.ThenFunc(app.chatHandler))
 	router.Handler(http.MethodPost, "/api/geojson", protected.ThenFunc(app.geoJsonHandler))
-
 	router.Handler(http.MethodGet, "/ws", protected.ThenFunc(app.handleConnections))
+
+	//TODO add roles so that only admins can do following tasks
+	router.Handler(http.MethodGet, "/panel", protected.ThenFunc(app.adminPanel))
+
 
 	standard := alice.New(app.recoverPanic, app.logRequest)
 
