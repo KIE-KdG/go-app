@@ -36,6 +36,7 @@ func (app *application) routes() http.Handler {
 
 	//TODO add roles so that only admins can do following tasks
 	router.Handler(http.MethodGet, "/panel", protected.ThenFunc(app.adminPanel))
+	router.Handler(http.MethodPost, "/api/upload", protected.ThenFunc(app.uploadPost))
 
 
 	standard := alice.New(app.recoverPanic, app.logRequest)

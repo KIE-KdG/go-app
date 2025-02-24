@@ -1,8 +1,14 @@
 {{define "title"}}Admin{{end}}
 {{define "main"}}
+
 <body>
   <div>
     <p>Manager the chat bot</p>
+    <form enctype="multipart/form-data" action="/api/upload" method="post">
+      <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
+      <input type="file" name="myFile" />
+      <input type="submit" value="upload" />
+    </form>
   </div>
 </body>
 {{end}}

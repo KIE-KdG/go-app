@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -245,4 +247,35 @@ func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
 func (app *application) adminPanel(w http.ResponseWriter, r *http.Request) {
 	data := app.newTemplateData(r)
 	app.render(w, http.StatusOK, "admin.tmpl.html", data)
+}
+
+func (app *application) uploadPost(w http.ResponseWriter, r *http.Request) {
+	r.ParseMultipartForm(10 << 20)
+
+	file, handler, err := r.FormFile("myFile")
+	if err != nil {
+		fmt.Println("Error Retrieving the File")
+		fmt.Println(err)
+		return
+	}
+	defer file.Close()
+
+	app.infoLog.Printf("Uploaded File: %+v\n", handler.Filename)
+	app.infoLog.Printf("File Size: %+v\n", handler.Size)
+	app.infoLog.Printf("MIME Header: %+v\n", handler.Header)
+
+	tempFile, err := ioutil.TempFile("data", "upload-*.json")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer tempFile.Close()
+
+	fileBytes, err := ioutil.ReadAll(file)
+	if err != nil {
+		fmt.Println(err)
+	}
+	// write this byte array to our temporary file
+	tempFile.Write(fileBytes)
+
+	http.Redirect(w, r, "/panel", http.StatusSeeOther)
 }
