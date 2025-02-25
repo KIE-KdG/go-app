@@ -103,6 +103,16 @@ func (app *application) geoJsonHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type WebSocketRequest struct {
+	Message  string `json:"message"`
+	DBUsed   bool   `json:"dbUsed"`
+	DocsUsed bool   `json:"docsUsed"`
+}
+
+type WebSocketResponse struct {
+	Prompt string `json:"prompt"`
+}
+
 func (app *application) handleConnections(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -117,18 +127,37 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 			app.errorLog.Println("read error:", err)
 			break
 		}
-		app.infoLog.Printf("Recieved message: %s\n", msg)
 
-		promptResponse, err := app.models.PromptOllama(string(msg))
+		var req WebSocketRequest
+		if err := json.Unmarshal(msg, &req); err != nil {
+			app.errorLog.Println("unmarshal error:", err)
+			continue
+		}
+		app.infoLog.Printf("Received message: %s, DB: %t, Docs: %t", req.Message, req.DBUsed, req.DocsUsed)
+
+		tokenChan, err := app.models.PromptOllamaStream(req.Message)
 		if err != nil {
 			app.serverError(w, err)
 			return
 		}
 
-		if err := ws.WriteMessage(websocket.TextMessage, []byte(promptResponse)); err != nil {
-			app.errorLog.Println("write error:", err)
-			break
+		for token := range tokenChan {
+			response := map[string]string {
+				"prompt": token,
+			}
+
+			jsonResponse, err := json.Marshal(response)
+			if err != nil {
+				app.serverError(w, err)
+				return
+			}
+
+			if err := ws.WriteMessage(websocket.TextMessage, jsonResponse); err != nil {
+				app.errorLog.Println("write error:", err)
+				break
+			}
 		}
+
 	}
 }
 

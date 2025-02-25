@@ -1,48 +1,42 @@
 {{define "nav"}}
-<nav class="bg-gray-800">
-  <div class="container mx-auto px-4">
-    <div class="flex items-center justify-between h-16">
+<nav>
+  <div class="navbar bg-base-100">
+    <div class="navbar-start">
       <!-- Logo -->
       <div class="flex-shrink-0">
-        <a href="/" class="text-white font-bold text-xl">LLM Chat</a>
+        <img href="/" class="size-20 w-fit" src="/static/img/de-vlaamse-waterweg-klant-synguard-3203192117.png"
+          alt="vlaamse-waterweg-logo">
       </div>
+    </div>
+    <div class="flex-none">
       <!-- Navigation Links -->
-      <div class="md:flex space-x-4">
-        <a href="/" class="rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Chat</a>
-        <a href="/map" class="rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Map</a>
-        <a href="/panel" class="rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Panel</a>
-        <div>
-          {{if .IsAuthenticated}}
-          <form action='/user/logout' method='POST'>
-            <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
-            <button>Logout</button>
-          </form>
-          {{else}}
-          <a href='/user/signup'>Signup</a>
-          <a href='/user/login'>Login</a>
-          {{end}}
-        </div>
-        <input
-        type="checkbox"
-        value="dark"
-        class="toggle theme-controller col-span-2 col-start-1 row-start-1 border-sky-400 bg-amber-300 [--tglbg:theme(colors.sky.500)] checked:border-blue-800 checked:bg-blue-300 checked:[--tglbg:theme(colors.blue.900)]" />
-      </div>
-      <!-- Mobile Menu Button -->
-      <div class="md:hidden">
-        <button id="mobile-menu-button" class="text-gray-300 hover:text-white focus:outline-none">
-          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-          </svg>
-        </button>
+      <ul class="menu menu-horizontal px-1">
+        <li>
+          <a href="/">Chat</a>
+        </li>
+        <li>
+          <a href="/map">Map</a>
+        </li>
+        <li><a href="/panel">Panel</a>
+        </li>
+      </ul>
+    </div>
+
+
+    <div class="navbar-end">
+      <div>
+        {{if .IsAuthenticated}}
+        <form action='/user/logout' method='POST'>
+          <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
+          <button>Logout</button>
+        </form>
+        {{else}}
+        <a href='/user/signup'>Signup</a>
+        <a href='/user/login'>Login</a>
+        {{end}}
       </div>
     </div>
-  </div>
-  <!-- Mobile Navigation Menu -->
-  <div id="mobile-menu" class="hidden md:hidden">
-    <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-      <a href="/" class="block rounded-md px-3 py-2 text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Chat</a>
-      <a href="/map" class="block rounded-md px-3 py-2 text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Map</a>
-    </div>
+
   </div>
 </nav>
 {{end}}

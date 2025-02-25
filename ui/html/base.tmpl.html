@@ -1,6 +1,7 @@
 {{define "base"}}
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
+
 <head>
   <meta charset="UTF-8">
   <title>{{template "title" .}} - LLM Chat</title>
@@ -10,16 +11,13 @@
   <script src="https://cdn.jsdelivr.net/npm/theme-change@2.0.2/index.js"></script>
   {{block "head" .}}{{end}}
 </head>
-<body class="min-h-screen flex flex-col">
+
+<body class="h-48 max-h-full md:max-h-screen">
   {{template "nav" .}}
-  <main class="flex-grow flex items-center justify-center">
+  <main>
     {{template "main" .}}
   </main>
-  <footer class="bg-gray-800 text-white py-4">
-    <div class="container mx-auto text-center">
-      <span>KdG in {{.CurrentYear}}</span>
-    </div>
-  </footer>
 </body>
+
 </html>
 {{end}}

@@ -1,27 +1,58 @@
 {{define "title"}}Home{{end}}
 {{define "main"}}
-<body class="bg-gray-100 dark:bg-gray-900 flex items-center justify-center min-h-screen">
-  <div x-data="chatApp()" x-init="init()" class="w-full max-w-lg bg-white dark:bg-gray-800 dark:text-white shadow-md rounded-lg p-6 container mx-auto flex flex-col">
-    <!-- Chat Header -->
-    <h2 class="text-2xl font-bold mb-2 dark:text-white">Chatbot</h2>
-    <p class="text-sm text-gray-600 mb-4 dark:text-gray-300">Powered by Ollama</p>
-    <!-- Chat Messages Container -->
-    <div id="chatMessages" class="overflow-y-auto h-64 border p-4 mb-4 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-      <template x-for="(message, index) in messages" :key="index">
-        <div :class="message.sender === 'You' ? 'chat chat-end' : 'chat chat-start'">
-          <strong x-text="message.sender" ></strong>: <span x-text="message.text"></span>
-        </div>
-      </template>
+
+<body class="bg-gray-100 dark:bg-gray-900">
+  <div class="min-h-screen flex items-center mx-auto">
+      <div x-data="chatApp()" x-init="init()" class="container">
+    <!-- Chat Input Form: now always appears below the chat container -->
+    <div class="card bg-base-100 w-5/6 shadow-xl dark:bg-gray-700">
+      <div class="p-6">
+        <form @submit.prevent="sendMessage" class="relative w-full">
+          <!-- Chat input -->
+          <textarea id="messageInput" x-model="inputMessage" placeholder="Type your message"
+            class="input w-full h-24 rounded focus:outline-none focus:ring-2 dark:bg-gray-700 dark:text-white dark:border-gray-700"></textarea>
+
+          <!-- Overlayed Checkboxes as rounded toggle buttons -->
+          <div class="card-actions justify-start">
+            <label class="flex min-w-8 h-9"
+              :class="{'btn': true, 'btn-primary': dbUsed, 'btn-outline': !dbUsed, 'rounded-full': true}">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="bevel">
+                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+              </svg>
+              <input type="checkbox" x-model="dbUsed" class="hidden">
+              DB
+            </label>
+            <label class="flex min-w-8 h-9"
+              :class="{'btn': true, 'btn-primary': docsUsed, 'btn-outline': !docsUsed, 'rounded-full': true}">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="bevel">
+                <path d="M13 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V9l-7-7z" />
+                <path d="M13 3v6h6" />
+              </svg>
+              <input type="checkbox" x-model="docsUsed" class="hidden">
+              Docs
+            </label>
+            <!-- Submit button with an icon -->
+            <button type="submit" id="sendButton"
+              class="absolute right-2 bottom-2 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="bevel">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M16 12l-4-4-4 4M12 16V9" />
+              </svg>
+            </button>
+          </div>
+
+        </form>
+      </div>
     </div>
-    <!-- Chat Input Form -->
-    <form @submit.prevent="sendMessage">
-      <input type="text" id="messageInput" x-model="inputMessage" placeholder="Type your message"
-             class="w-full border rounded p-2 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:text-white dark:border-gray-600">
-      <button type="submit" id="sendButton" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
-        Send
-      </button>
-    </form>
   </div>
+  </div>
+
+
 
   <script>
     function chatApp() {
@@ -29,8 +60,10 @@
         ws: null,
         inputMessage: '',
         messages: [],
+        dbUsed: false,
+        docsUsed: false,
         init() {
-          // Establish a WebSocket connection to ws://localhost:4000
+          // Establish a WebSocket connection.
           this.ws = new WebSocket('wss://localhost:4000/ws');
           this.ws.addEventListener('open', () => {
             console.log('WebSocket connection established');
@@ -41,16 +74,23 @@
             try {
               data = JSON.parse(event.data);
             } catch (e) {
-              data = { response: event.data };
+              data = { prompt: event.data };
             }
-            this.messages.push({
-              sender: 'AI',
-              text: data.response || event.data
-            });
-            // Ensure the chat messages container scrolls to the bottom
+            // Append streaming tokens to the latest AI message.
+            if (this.messages.length > 0 && this.messages[this.messages.length - 1].sender === 'AI') {
+              this.messages[this.messages.length - 1].text += data.prompt;
+            } else {
+              this.messages.push({
+                sender: 'AI',
+                text: data.prompt
+              });
+            }
+            // Auto-scroll to the bottom.
             this.$nextTick(() => {
               const chatMessages = document.getElementById('chatMessages');
-              chatMessages.scrollTop = chatMessages.scrollHeight;
+              if (chatMessages) {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+              }
             });
           });
           this.ws.addEventListener('close', () => {
@@ -62,18 +102,24 @@
         },
         sendMessage() {
           if (!this.inputMessage.trim()) return;
-          // Add user's message to the chat
+          // Add user's message to the chat.
           this.messages.push({
             sender: 'You',
             text: this.inputMessage
           });
-          // Send the message to the server via WebSocket in JSON format
+          // Log the current states for debugging.
+          console.log("Sending message with dbUsed:", this.dbUsed, "docsUsed:", this.docsUsed);
+          // Send the actual values of the checkboxes along with the prompt.
           if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ message: this.inputMessage }));
+            this.ws.send(JSON.stringify({
+              message: this.inputMessage,
+              dbUsed: this.dbUsed,
+              docsUsed: this.docsUsed
+            }));
           } else {
             console.error('WebSocket is not open');
           }
-          // Clear the input field
+          // Clear the input field.
           this.inputMessage = '';
         }
       }
