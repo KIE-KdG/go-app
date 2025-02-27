@@ -26,13 +26,13 @@
     <div class="navbar-end">
       <div>
         {{if .IsAuthenticated}}
-        <form action='/user/logout' method='POST'>
+        <form action='/user/logout' method='POST' class="btn btn-secondary">
           <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
           <button>Logout</button>
         </form>
         {{else}}
-        <a href='/user/signup'>Signup</a>
-        <a href='/user/login'>Login</a>
+        <a href='/user/signup' class="btn btn-secondary">Signup</a>
+        <a href='/user/login' class="btn btn-secondary">Login</a>
         {{end}}
       </div>
     </div>
