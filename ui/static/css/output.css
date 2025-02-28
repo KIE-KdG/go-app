@@ -2288,12 +2288,12 @@ html {
   min-height: 100vh;
 }
 
-.w-4 {
-  width: 1rem;
+.w-2\/3 {
+  width: 66.666667%;
 }
 
-.w-5\/6 {
-  width: 83.333333%;
+.w-4 {
+  width: 1rem;
 }
 
 .w-96 {
@@ -2307,26 +2307,6 @@ html {
 
 .w-full {
   width: 100%;
-}
-
-.w-2\/3 {
-  width: 66.666667%;
-}
-
-.w-2 {
-  width: 0.5rem;
-}
-
-.w-40 {
-  width: 10rem;
-}
-
-.w-1\/6 {
-  width: 16.666667%;
-}
-
-.w-3\/4 {
-  width: 75%;
 }
 
 .min-w-8 {

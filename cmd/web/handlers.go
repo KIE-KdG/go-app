@@ -40,18 +40,6 @@ func (app *application) mapView(w http.ResponseWriter, r *http.Request) {
 	app.render(w, http.StatusOK, "map.tmpl.html", data)
 }
 
-func (app *application) socketView(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/socket" {
-		app.notFound(w)
-		return
-	}
-
-	data := app.newTemplateData(r)
-
-	app.render(w, http.StatusOK, "socket.tmpl.html", data)
-
-}
-
 type ChatRequest struct {
 	Message string `json:"message"`
 }
@@ -72,7 +60,13 @@ func (app *application) chatHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	promptResponse, err := app.models.PromptOllama(req.Message)
+	jsonData, err := json.Marshal(req)
+	if err != nil {
+		app.serverError(w, err)
+		return
+	}
+
+	promptResponse, err := app.chatPort.ForwardMessage(string(jsonData))
 	if err != nil {
 		app.serverError(w, err)
 		return
@@ -135,29 +129,23 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 		}
 		app.infoLog.Printf("Received message: %s, DB: %t, Docs: %t", req.Message, req.DBUsed, req.DocsUsed)
 
-		tokenChan, err := app.models.PromptOllamaStream(req.Message)
+		promptResponse, err := app.chatPort.ForwardMessage(req.Message)
 		if err != nil {
 			app.serverError(w, err)
 			return
 		}
 
-		for token := range tokenChan {
-			response := map[string]string {
-				"prompt": token,
-			}
-
-			jsonResponse, err := json.Marshal(response)
-			if err != nil {
-				app.serverError(w, err)
-				return
-			}
-
-			if err := ws.WriteMessage(websocket.TextMessage, jsonResponse); err != nil {
-				app.errorLog.Println("write error:", err)
-				break
-			}
+		res := WebSocketResponse{Prompt: promptResponse}
+		jsonRes, err := json.Marshal(res)
+		if err != nil {
+			app.serverError(w, err)
+			return
 		}
 
+		if err := ws.WriteMessage(websocket.TextMessage, jsonRes); err != nil {
+			app.errorLog.Println("write error:", err)
+			break
+		}
 	}
 }
 
