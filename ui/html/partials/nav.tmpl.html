@@ -3,10 +3,7 @@
   <div class="navbar bg-base-100">
     <div class="navbar-start">
       <!-- Logo -->
-      <div class="flex-shrink-0">
-        <img href="/" class="size-20 w-fit" src="/static/img/de-vlaamse-waterweg-klant-synguard-3203192117.png"
-          alt="vlaamse-waterweg-logo">
-      </div>
+      {{template "logo" .}}
     </div>
     <div class="flex-none">
       <!-- Navigation Links -->
@@ -17,13 +14,35 @@
         <li>
           <a href="/map">Map</a>
         </li>
-        <li><a href="/panel">Panel</a>
+        <li>
+          <a href="/panel">Panel</a>
         </li>
       </ul>
     </div>
 
-
-    <div class="navbar-end mx-auto">
+    <div class="navbar-end mx-auto flex items-center">
+      <!-- Theme Toggle -->
+      <input type="checkbox" id="theme-toggle" value="waaterweg-dark" class="toggle theme-controller" onchange="toggleTheme(this)">
+      <script>
+        // Function to update theme and save the choice in localStorage
+        function toggleTheme(element) {
+          if (element.checked) {
+            document.documentElement.setAttribute('data-theme', element.value);
+            localStorage.setItem('theme', element.value);
+          } else {
+            document.documentElement.setAttribute('data-theme', 'waaterweg');
+            localStorage.setItem('theme', 'waaterweg');
+          }
+        }
+        // Set the toggle state based on the saved theme when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+          const savedTheme = localStorage.getItem('theme') || 'waaterweg';
+          if (savedTheme === 'waaterweg-dark') {
+            document.getElementById('theme-toggle').checked = true;
+          }
+          document.documentElement.setAttribute('data-theme', savedTheme);
+        });
+      </script>
       <div>
         {{if .IsAuthenticated}}
         <form action='/user/logout' method='POST' class="btn btn-secondary">
@@ -36,7 +55,6 @@
         {{end}}
       </div>
     </div>
-
   </div>
 </nav>
 {{end}}

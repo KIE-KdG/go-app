@@ -104,7 +104,7 @@ type WebSocketRequest struct {
 }
 
 type WebSocketResponse struct {
-	Prompt string `json:"prompt"`
+	Prompts string `json:"prompt"`
 }
 
 func (app *application) handleConnections(w http.ResponseWriter, r *http.Request) {
@@ -129,13 +129,14 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 		}
 		app.infoLog.Printf("Received message: %s, DB: %t, Docs: %t", req.Message, req.DBUsed, req.DocsUsed)
 
-		promptResponse, err := app.chatPort.ForwardMessage(req.Message)
+		//promptResponse, err := app.chatPort.ForwardMessage(req.Message)
+		promptResponse, err := app.models.PromptOllama(req.Message)
 		if err != nil {
 			app.serverError(w, err)
 			return
 		}
 
-		res := WebSocketResponse{Prompt: promptResponse}
+		res := WebSocketResponse{Prompts: promptResponse}
 		jsonRes, err := json.Marshal(res)
 		if err != nil {
 			app.serverError(w, err)
