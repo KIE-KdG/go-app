@@ -2,20 +2,19 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
 	"runtime/debug"
 	"time"
-	"errors"
 
-	"github.com/gorilla/websocket"
 	"github.com/go-playground/form/v4"
-	"github.com/justinas/nosurf" 
-
+	"github.com/gorilla/websocket"
+	"github.com/justinas/nosurf"
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true},
+	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
 func (app *application) serverError(w http.ResponseWriter, err error) {
@@ -34,11 +33,12 @@ func (app *application) notFound(w http.ResponseWriter) {
 }
 
 func (app *application) newTemplateData(r *http.Request) *templateData {
+
 	return &templateData{
-		CurrentYear: time.Now().Year(),
-		Flash: app.sessionManager.PopString(r.Context(), "flash"),
+		CurrentYear:     time.Now().Year(),
+		Flash:           app.sessionManager.PopString(r.Context(), "flash"),
 		IsAuthenticated: app.isAuthenticated(r),
-		CSRFToken: nosurf.Token(r),
+		CSRFToken:       nosurf.Token(r),
 	}
 }
 
@@ -80,7 +80,7 @@ func (app *application) decodePostForm(r *http.Request, dst any) error {
 		return err
 	}
 
-	return nil 
+	return nil
 }
 
 func (app *application) isAuthenticated(r *http.Request) bool {

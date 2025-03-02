@@ -4,16 +4,19 @@ import (
 	"html/template"
 	"path/filepath"
 	"time"
+
+	"github.com/nicksnyder/go-i18n/v2/i18n"
 )
 
 type templateData struct {
-	Completion string
-	CurrentYear int
-	GeoData map[string]interface{}
+	Completion      string
+	CurrentYear     int
+	GeoData         map[string]interface{}
 	Form            any
 	Flash           string
 	IsAuthenticated bool
 	CSRFToken       string
+	Localizer       *i18n.Localizer
 }
 
 func humanDate(t time.Time) string {

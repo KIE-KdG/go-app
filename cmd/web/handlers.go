@@ -17,6 +17,11 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	lang := r.Header.Get("Accept-Language")
+	if lang == "" {
+		lang = "en"
+	}
+
 	data := app.newTemplateData(r)
 
 	app.render(w, http.StatusOK, "home.tmpl.html", data)

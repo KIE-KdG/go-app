@@ -13,10 +13,13 @@ import (
 	"kdg/be/lab/internal/model"
 	"kdg/be/lab/internal/models"
 
+	"github.com/BurntSushi/toml"
 	"github.com/alexedwards/scs/sqlite3store"
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-playground/form/v4"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/nicksnyder/go-i18n/v2/i18n"
+	"golang.org/x/text/language"
 )
 
 type application struct {
@@ -29,6 +32,7 @@ type application struct {
 	templateCache  map[string]*template.Template
 	formDecoder    *form.Decoder
 	sessionManager *scs.SessionManager
+	i18nBundle    *i18n.Bundle
 }
 
 func main() {
@@ -46,6 +50,11 @@ func main() {
 		errorLog.Fatal(err)
 	}
 	defer db.Close()
+
+	i18nBundle, err := init18n()
+	if err != nil {
+		errorLog.Fatal(err)
+	}
 
 	templateCache, err := newTemplateCache()
 	if err != nil {
@@ -69,6 +78,7 @@ func main() {
 		templateCache:  templateCache,
 		formDecoder:    formDecoder,
 		sessionManager: sessionManager,
+		i18nBundle:    i18nBundle,
 	}
 
 	tlsConfig := &tls.Config{
@@ -104,4 +114,18 @@ func openDB(dsn string) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+func init18n() (*i18n.Bundle, error) {
+	bundle := i18n.NewBundle(language.English)
+
+	bundle.RegisterUnmarshalFunc("toml", toml.Unmarshal)
+
+	if _, err := bundle.LoadMessageFile("locales/active.en.toml"); err != nil {
+		return nil, err
+	}
+	if _, err := bundle.LoadMessageFile("locales/active.nl.toml"); err != nil {
+		return nil, err
+	}
+	return bundle, nil
 }
