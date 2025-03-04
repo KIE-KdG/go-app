@@ -27,6 +27,10 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 	app.render(w, http.StatusOK, "home.tmpl.html", data)
 }
 
+func (app *application) newChatPost(w http.ResponseWriter, r *http.Request) {
+	//
+}
+
 func (app *application) mapView(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/map" {
 		app.notFound(w)

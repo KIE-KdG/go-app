@@ -30,10 +30,11 @@ type application struct {
 	chatPort       *model.ChatPort
 	geoData        *models.GeoData
 	users          *models.UserModel
+	chats          *models.ChatModel
 	templateCache  map[string]*template.Template
 	formDecoder    *form.Decoder
 	sessionManager *scs.SessionManager
-	i18nBundle    *i18n.Bundle
+	i18nBundle     *i18n.Bundle
 }
 
 func main() {
@@ -76,10 +77,11 @@ func main() {
 		chatPort:       &model.ChatPort{Port: *chatPort},
 		geoData:        &models.GeoData{},
 		users:          &models.UserModel{DB: db},
+		chats:          &models.ChatModel{DB: db},
 		templateCache:  templateCache,
 		formDecoder:    formDecoder,
 		sessionManager: sessionManager,
-		i18nBundle:    i18nBundle,
+		i18nBundle:     i18nBundle,
 	}
 
 	tlsConfig := &tls.Config{
