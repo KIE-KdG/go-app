@@ -15,23 +15,7 @@ import (
 )
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
-	userID := app.userIdFromSession(r)
-
-	chats, err := app.chats.RetrieveByUserId(userID)
-	if err != nil {
-		app.serverError(w, err)
-		return
-	}
-
-	lang := r.Header.Get("Accept-Language")
-	if lang == "" {
-		lang = "en"
-	}
-
-	data := app.newTemplateData(r)
-	data.Chats = chats
-
-	app.render(w, http.StatusOK, "home.tmpl.html", data)
+	app.newChatPost(w, r)
 }
 
 func (app *application) chat(w http.ResponseWriter, r *http.Request) {
