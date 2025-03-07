@@ -2,6 +2,7 @@ package main
 
 import (
 	"html/template"
+	"kdg/be/lab/internal/models"
 	"path/filepath"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 type templateData struct {
 	Completion      string
 	CurrentYear     int
+	Chats           []*models.Chat
+	Messages        []*models.Message
 	GeoData         map[string]interface{}
 	Form            any
 	Flash           string
@@ -20,7 +23,11 @@ type templateData struct {
 }
 
 func humanDate(t time.Time) string {
-	return t.Format("02 Jan 2006 at 15:04")
+	if t.IsZero() {
+		return ""
+	}
+
+	return t.UTC().Format("02 Jan 2006 at 15:04")
 }
 
 var functions = template.FuncMap{

@@ -30,6 +30,7 @@ type application struct {
 	geoData        *models.GeoData
 	users          *models.UserModel
 	chats          *models.ChatModel
+	messages       *models.MessageModel
 	templateCache  map[string]*template.Template
 	formDecoder    *form.Decoder
 	sessionManager *scs.SessionManager
@@ -77,6 +78,7 @@ func main() {
 		geoData:        &models.GeoData{},
 		users:          &models.UserModel{DB: db},
 		chats:          &models.ChatModel{DB: db},
+		messages: &models.MessageModel{DB: db},
 		templateCache:  templateCache,
 		formDecoder:    formDecoder,
 		sessionManager: sessionManager,

@@ -3,17 +3,23 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/websocket"
+	"github.com/julienschmidt/httprouter"
 
 	"kdg/be/lab/internal/models"
 	"kdg/be/lab/internal/validator"
 )
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		app.notFound(w)
+	userID := app.userIdFromSession(r)
+
+	chats, err := app.chats.RetrieveByUserId(userID)
+	if err != nil {
+		app.serverError(w, err)
 		return
 	}
 
@@ -23,12 +29,50 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := app.newTemplateData(r)
+	data.Chats = chats
+
+	app.render(w, http.StatusOK, "home.tmpl.html", data)
+}
+
+func (app *application) chat(w http.ResponseWriter, r *http.Request) {
+	userID := app.userIdFromSession(r)
+	params := httprouter.ParamsFromContext(r.Context())
+
+	id, err := strconv.Atoi(params.ByName("id"))
+	if err != nil || id < 1 {
+		app.notFound(w)
+		return
+	}
+
+	chats, err := app.chats.RetrieveByUserId(userID)
+	if err != nil {
+		app.serverError(w, err)
+		return
+	}
+
+	messages, err := app.messages.GetByChatID(id)
+	if err != nil {
+		app.serverError(w, err)
+		return
+	}
+
+	data := app.newTemplateData(r)
+	data.Chats = chats
+	data.Messages = messages
 
 	app.render(w, http.StatusOK, "home.tmpl.html", data)
 }
 
 func (app *application) newChatPost(w http.ResponseWriter, r *http.Request) {
-	//
+	userID := app.userIdFromSession(r)
+
+	id, err := app.chats.Insert(userID)
+	if err != nil {
+		app.serverError(w, err)
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/chat/%d", id), http.StatusSeeOther)
 }
 
 func (app *application) mapView(w http.ResponseWriter, r *http.Request) {
@@ -138,8 +182,8 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 		}
 		app.infoLog.Printf("Received message: %s, DB: %t, Docs: %t", req.Message, req.DBUsed, req.DocsUsed)
 
-		promptResponse, err := app.chatPort.ForwardMessage(req.Message)
-		//promptResponse, err := app.models.PromptOllama(req.Message)
+		//promptResponse, err := app.chatPort.ForwardMessage(req.Message)
+		promptResponse, err := app.models.PromptOllama(req.Message)
 		if err != nil {
 			app.serverError(w, err)
 			return

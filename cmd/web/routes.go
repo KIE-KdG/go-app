@@ -28,6 +28,8 @@ func (app *application) routes() http.Handler {
 	protected := dynamic.Append(app.requireAuthentication)
 
   router.Handler(http.MethodGet, "/", protected.ThenFunc(app.home))
+	router.Handler(http.MethodPost, "/chat", protected.ThenFunc(app.newChatPost))
+	router.Handler(http.MethodGet, "/chat/:id", protected.ThenFunc(app.chat))
 	router.Handler(http.MethodGet, "/map", protected.ThenFunc(app.mapView))
 	router.Handler(http.MethodPost, "/api/chat", protected.ThenFunc(app.chatHandler))
 	router.Handler(http.MethodPost, "/api/geojson", protected.ThenFunc(app.geoJsonHandler))
