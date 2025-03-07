@@ -138,8 +138,8 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 		}
 		app.infoLog.Printf("Received message: %s, DB: %t, Docs: %t", req.Message, req.DBUsed, req.DocsUsed)
 
-		//promptResponse, err := app.chatPort.ForwardMessage(req.Message)
-		promptResponse, err := app.models.PromptOllama(req.Message)
+		promptResponse, err := app.chatPort.ForwardMessage(req.Message)
+		//promptResponse, err := app.models.PromptOllama(req.Message)
 		if err != nil {
 			app.serverError(w, err)
 			return

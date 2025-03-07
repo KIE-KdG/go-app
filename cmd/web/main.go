@@ -25,7 +25,6 @@ import (
 type application struct {
 	errorLog       *log.Logger
 	infoLog        *log.Logger
-	db             *db.DB
 	models         *model.Models
 	chatPort       *model.ChatPort
 	geoData        *models.GeoData
@@ -104,19 +103,6 @@ func main() {
 	infoLog.Printf("Starting chat server on %s", *chatPort)
 	err = srv.ListenAndServeTLS("./tls/cert.pem", "./tls/key.pem")
 	errorLog.Fatal(err)
-}
-
-func openDB(dsn string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", dsn)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := db.Ping(); err != nil {
-		return nil, err
-	}
-
-	return db, nil
 }
 
 func init18n() (*i18n.Bundle, error) {
