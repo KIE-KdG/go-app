@@ -3,24 +3,46 @@
   <div x-data="chatApp()" x-init="init()" class="flex flex-col flex-1">
     <!-- Chat messages container -->
     <div id="chatMessages" class="flex-1 flex flex-col gap-3 px-4 pt-1 overflow-auto">
-      <!-- Each message from the chat is rendered below its corresponding comment -->
       <template x-for="(message, index) in messages" :key="index">
-        <div class="chat-message p-2 rounded shadow-md"
-          :class="{'bg-blue-100': message.sender === 'You', 'bg-green-100': message.sender === 'AI'}">
-          <div class="sender text-black font-bold" x-text="message.sender"></div>
-          <!-- Render message content with clickable links -->
-          <pre class="message-text text-black whitespace-pre-wrap" x-html="formatMessage(message.text)"></pre>
+        <div class="chat-message p-2 rounded shadow-md text-black dark:text-white"
+          :class="{'bg-blue-100 dark:bg-blue-900': message.sender === 'You', 'bg-green-100 dark:bg-green-900': message.sender === 'AI'}">
+          <div class="sender font-bold" x-text="message.sender"></div>
+
+          <!-- AI Response Block -->
+          <template x-if="message.sender === 'AI' && (message.statusUpdates || message.answer)">
+            <div>
+              <!-- Status dropdown rendered if there is at least one status update -->
+              <details class="dropdown open" x-show="message.statusUpdates.length > 0">
+                <summary class="cursor-pointer text-blue-600 dark:text-blue-400">Status Updates</summary>
+                <div class="dropdown-content p-2 bg-white dark:bg-gray-700">
+                  <template x-for="(status, i) in message.statusUpdates" :key="i">
+                    <p class="text-black dark:text-white" x-text="status"></p>
+                  </template>
+                </div>
+              </details>
+              <!-- Final answer paragraph -->
+              <template x-if="message.answer">
+                <pre class="message-text whitespace-pre-wrap text-black dark:text-white"
+                  x-html="formatMessage(message.answer)"></pre>
+              </template>
+            </div>
+          </template>
+
+          <!-- User message -->
+          <template x-if="message.sender === 'You'">
+            <pre class="message-text whitespace-pre-wrap text-black dark:text-white"
+              x-html="formatMessage(message.text)"></pre>
+          </template>
         </div>
       </template>
     </div>
-    <!-- Chat Input Form: always stays at the bottom of the screen -->
+
+    <!-- Chat Input Form: always stays at the bottom -->
     <div class="card bg-base-100 w-full shadow-xl sticky bottom-0 z-10">
       <div class="p-6 relative">
         <form @submit.prevent="sendMessage" class="relative w-full">
-          <!-- Chat input -->
           <textarea id="messageInput" x-model="inputMessage" placeholder="Type your message"
             class="input w-full h-24 rounded focus:outline-none focus:ring-2"></textarea>
-          <!-- Overlayed Checkboxes as rounded toggle buttons -->
           <div class="card-actions justify-start mt-2">
             <label class="flex min-w-8 h-9"
               :class="{'btn': true, 'btn-primary': dbUsed, 'btn-outline': !dbUsed, 'rounded-full': true}">
@@ -43,7 +65,6 @@
               <input type="checkbox" x-model="docsUsed" class="hidden">
               Docs
             </label>
-            <!-- Submit button with an icon -->
             <button type="submit" id="sendButton"
               class="absolute right-2 bottom-2 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
@@ -66,6 +87,7 @@
       ws: null,
       inputMessage: '',
       messages: [],
+      currentResponse: null,
       dbUsed: false,
       docsUsed: false,
       init() {
@@ -76,20 +98,32 @@
         });
         this.ws.addEventListener('message', (event) => {
           console.log('Received:', event.data);
-          let data;
+          let data = {};
           try {
             data = JSON.parse(event.data);
           } catch (e) {
-            data = { prompt: event.data };
+            console.error('Error parsing JSON:', event.data);
+            return;
           }
-          // Append streaming tokens to the latest AI message.
-          if (this.messages.length > 0 && this.messages[this.messages.length - 1].sender === 'AI') {
-            this.messages[this.messages.length - 1].text += data.prompt;
-          } else {
-            this.messages.push({
-              sender: 'AI',
-              text: data.prompt
-            });
+          // Append status updates to the current AI response block.
+          if (data.status) {
+            if (this.currentResponse) {
+              this.currentResponse.statusUpdates.push(data.status.trim());
+            }
+          }
+          // When the answer is received, set it in the current block.
+          if (data.answer) {
+            if (!this.currentResponse) {
+              this.messages.push({
+                sender: 'AI',
+                statusUpdates: [],
+                answer: ''
+              });
+              this.currentResponse = this.messages[this.messages.length - 1];
+            }
+            this.currentResponse.answer = data.answer;
+            // Reset currentResponse so subsequent statuses create a new block.
+            this.currentResponse = null;
           }
           // Auto-scroll to the bottom.
           this.$nextTick(() => {
@@ -108,11 +142,18 @@
       },
       sendMessage() {
         if (!this.inputMessage.trim()) return;
-        // Add user's message to the chat.
+        // Add the user's message.
         this.messages.push({
           sender: 'You',
           text: this.inputMessage
         });
+        // Create a new pending AI response block.
+        this.messages.push({
+          sender: 'AI',
+          statusUpdates: [],
+          answer: ''
+        });
+        this.currentResponse = this.messages[this.messages.length - 1];
         console.log("Sending message with dbUsed:", this.dbUsed, "docsUsed:", this.docsUsed);
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           this.ws.send(JSON.stringify({
@@ -126,9 +167,12 @@
         this.inputMessage = '';
       },
       formatMessage(message) {
-        // Convert URLs into clickable links.
+        // Convert URLs into clickable links with dark mode support.
         const urlRegex = /(https?:\/\/[^\s]+)/g;
-        return message.replace(urlRegex, '<a href="$1" target="_blank" class="text-blue-600 underline">$1</a>');
+        return message.replace(urlRegex, '<a href="$1" target="_blank" class="text-blue-600 dark:text-blue-400 underline">$1</a>');
+      },
+      formatMarkdown(text) {
+        return marked(text);
       }
     }
   }

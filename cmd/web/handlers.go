@@ -134,14 +134,21 @@ func (app *application) geoJsonHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type LLMStreamResponse struct {
+	Status  string `json:"status,omitempty"`
+	Result  string `json:"result,omitempty"`
+	Details string `json:"details,omitempty"`
+}
+
+type FinalResponse struct {
+	Status string `json:"status,omitempty"`
+	Answer string `json:"answer,omitempty"`
+}
+
 type WebSocketRequest struct {
 	Message  string `json:"message"`
 	DBUsed   bool   `json:"dbUsed"`
 	DocsUsed bool   `json:"docsUsed"`
-}
-
-type WebSocketResponse struct {
-	Prompts string `json:"prompt"`
 }
 
 func (app *application) handleConnections(w http.ResponseWriter, r *http.Request) {
@@ -166,26 +173,52 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 		}
 		app.infoLog.Printf("Received message: %s, DB: %t, Docs: %t", req.Message, req.DBUsed, req.DocsUsed)
 
-		//promptResponse, err := app.chatPort.ForwardMessage(req.Message)
-		promptResponse, err := app.models.PromptOllama(req.Message)
+		promptResponse, err := app.chatPort.ForwardMessageWithStream(req.Message, req.DBUsed, req.DocsUsed)
 		if err != nil {
 			app.serverError(w, err)
 			return
 		}
+		
 
-		res := WebSocketResponse{Prompts: promptResponse}
-		jsonRes, err := json.Marshal(res)
-		if err != nil {
-			app.serverError(w, err)
-			return
-		}
+		// Stream each message from the channel to the client.
+		for prompt := range promptResponse {
+			app.infoLog.Println(prompt)
+			// Unmarshal the incoming JSON prompt.
+			var streamResp LLMStreamResponse
+			if err := json.Unmarshal([]byte(prompt), &streamResp); err != nil {
+				app.errorLog.Println("error unmarshaling LLM response:", err)
+				// Fallback: send the raw prompt as a status message.
+				streamResp.Status = prompt
+			}
 
-		if err := ws.WriteMessage(websocket.TextMessage, jsonRes); err != nil {
-			app.errorLog.Println("write error:", err)
-			break
+			// Create the final response struct.
+			finalResp := FinalResponse{}
+			if streamResp.Status != "" {
+				finalResp.Status = streamResp.Status
+			} else if streamResp.Result != "" && streamResp.Details != "" {
+				// Parse the nested "answer" from the details.
+				var detailsMap map[string]interface{}
+				if err := json.Unmarshal([]byte(streamResp.Details), &detailsMap); err == nil {
+					if answer, ok := detailsMap["answer"].(string); ok {
+						finalResp.Answer = answer
+					}
+				}
+			}
+
+			jsonRes, err := json.Marshal(finalResp)
+			if err != nil {
+				app.serverError(w, err)
+				return
+			}
+
+			if err := ws.WriteMessage(websocket.TextMessage, jsonRes); err != nil {
+				app.errorLog.Println("write error:", err)
+				break
+			}
 		}
 	}
 }
+
 
 type userSignupForm struct {
 	Name                string `form:"name"`
