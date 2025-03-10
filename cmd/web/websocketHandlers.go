@@ -1,0 +1,101 @@
+package main
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/gorilla/websocket"
+)
+
+type LLMStreamResponse struct {
+	Status  string `json:"status,omitempty"`
+	Result  string `json:"result,omitempty"`
+	Details string `json:"details,omitempty"`
+}
+
+type FinalResponse struct {
+	Status string `json:"status,omitempty"`
+	Answer string `json:"answer,omitempty"`
+}
+
+type WebSocketRequest struct {
+	Message  string `json:"message"`
+	DBUsed   bool   `json:"dbUsed"`
+	DocsUsed bool   `json:"docsUsed"`
+}
+
+func (app *application) handleConnections(w http.ResponseWriter, r *http.Request) {
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		app.serverError(w, err)
+		return
+	}
+	defer ws.Close()
+
+	for {
+		_, msg, err := ws.ReadMessage()
+		if err != nil {
+			app.errorLog.Println("read error:", err)
+			break
+		}
+
+		req, err := parseWSRequest(msg)
+		if err != nil {
+			app.errorLog.Println("parse error:", err)
+			continue
+		}
+		app.infoLog.Printf("Received message: %s, DB: %t, Docs: %t", req.Message, req.DBUsed, req.DocsUsed)
+
+		promptResponse, err := app.chatPort.ForwardMessageWithStream(req.Message, req.DBUsed, req.DocsUsed)
+		if err != nil {
+			app.serverError(w, err)
+			return
+		}
+
+		for prompt := range promptResponse {
+			finalResp := app.processPrompt(prompt)
+			if err := sendJSON(ws, finalResp); err != nil {
+				app.errorLog.Println("write error:", err)
+				break
+			}
+		}
+	}
+}
+
+// parseWSRequest unmarshals the JSON message into a WebSocketRequest.
+func parseWSRequest(msg []byte) (WebSocketRequest, error) {
+	var req WebSocketRequest
+	err := json.Unmarshal(msg, &req)
+	return req, err
+}
+
+// processPrompt converts the raw prompt string into a FinalResponse.
+func (app *application) processPrompt(prompt string) FinalResponse {
+	var streamResp LLMStreamResponse
+	if err := json.Unmarshal([]byte(prompt), &streamResp); err != nil {
+		app.errorLog.Println("error unmarshaling LLM response:", err)
+		// Fallback: return the raw prompt as a status.
+		return FinalResponse{Status: prompt}
+	}
+
+	if streamResp.Status != "" {
+		return FinalResponse{Status: streamResp.Status}
+	} else if streamResp.Result != "" && streamResp.Details != "" {
+		var detailsMap map[string]interface{}
+		if err := json.Unmarshal([]byte(streamResp.Details), &detailsMap); err == nil {
+			if answer, ok := detailsMap["answer"].(string); ok {
+				return FinalResponse{Answer: answer}
+			}
+		}
+	}
+	return FinalResponse{}
+}
+
+// sendJSON marshals the given data and sends it as a TextMessage.
+func sendJSON(ws *websocket.Conn, data interface{}) error {
+	jsonRes, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return ws.WriteMessage(websocket.TextMessage, jsonRes)
+}

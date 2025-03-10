@@ -12,7 +12,7 @@ Usage:
 
 Or use air live reload
 
-`go install github.com/air-verse/air@latest` to install 
+`go install github.com/air-verse/air@latest` to install
 
 run `air` to start the live reload
 

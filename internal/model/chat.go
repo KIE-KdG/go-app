@@ -1,6 +1,8 @@
 package model
 
 import (
+	"encoding/json"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -48,6 +50,17 @@ func (c *ChatPort) ForwardMessageWithStream(message string, dbUsed, docsUsed boo
 		return nil, err
 	}
 
+	req := WebSocketRequest{
+		Message:  message,
+    DBUsed:   dbUsed,
+    DocsUsed: docsUsed,
+	}
+
+	jsonMsg, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
 	respChan := make(chan string)
 
 	go func() {
@@ -55,8 +68,7 @@ func (c *ChatPort) ForwardMessageWithStream(message string, dbUsed, docsUsed boo
 		defer close(respChan)
 
 		// Write the initial message to the upstream server.
-		if err := conn.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
-			// You might want to log or handle the error here.
+		if err := conn.WriteMessage(websocket.TextMessage, jsonMsg); err != nil {
 			return
 		}
 
@@ -64,7 +76,6 @@ func (c *ChatPort) ForwardMessageWithStream(message string, dbUsed, docsUsed boo
 		for {
 			_, msg, err := conn.ReadMessage()
 			if err != nil {
-				// Log error if needed and exit the loop.
 				break
 			}
 			
