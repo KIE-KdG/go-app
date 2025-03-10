@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 
+	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -17,10 +17,12 @@ func (app *application) chat(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIdFromSession(r)
 	params := httprouter.ParamsFromContext(r.Context())
 
-	id, err := strconv.Atoi(params.ByName("id"))
-	if err != nil || id < 1 {
-		app.notFound(w)
-		return
+	idStr := params.ByName("id")
+
+	uuid, err := uuid.Parse(idStr)
+	if err != nil {
+			app.notFound(w)
+			return
 	}
 
 	chats, err := app.chats.RetrieveByUserId(userID)
@@ -29,7 +31,7 @@ func (app *application) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages, err := app.messages.GetByChatID(id)
+	messages, err := app.messages.GetByChatID(uuid)
 	if err != nil {
 		app.serverError(w, err)
 		return
@@ -45,13 +47,13 @@ func (app *application) chat(w http.ResponseWriter, r *http.Request) {
 func (app *application) newChatPost(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIdFromSession(r)
 
-	id, err := app.chats.Insert(userID)
+	chatID, err := app.chats.Insert(userID)
 	if err != nil {
 		app.serverError(w, err)
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/chat/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/chat/%s", chatID), http.StatusSeeOther)
 }
 
 func (app *application) mapView(w http.ResponseWriter, r *http.Request) {

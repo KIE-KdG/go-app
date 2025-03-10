@@ -78,7 +78,7 @@ func main() {
 		geoData:        &models.GeoData{},
 		users:          &models.UserModel{DB: db},
 		chats:          &models.ChatModel{DB: db},
-		messages: &models.MessageModel{DB: db},
+		messages:       &models.MessageModel{DB: db},
 		templateCache:  templateCache,
 		formDecoder:    formDecoder,
 		sessionManager: sessionManager,

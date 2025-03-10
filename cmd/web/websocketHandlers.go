@@ -51,6 +51,7 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 			app.serverError(w, err)
 			return
 		}
+		app.infoLog.Print(promptResponse)
 
 		for prompt := range promptResponse {
 			finalResp := app.processPrompt(prompt)

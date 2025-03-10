@@ -3,11 +3,13 @@ package models
 import (
 	"database/sql"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Chat represents a conversation between users
 type Chat struct {
-	ID          int
+	ID          []byte 
 	UserID      int
 	Messages    []Message
 	Created     time.Time
@@ -20,28 +22,19 @@ type ChatModel struct {
 }
 
 // Insert creates a new chat for a user
-func (m *ChatModel) Insert(userID int) (int, error) {
+func (m *ChatModel) Insert(userID int) (uuid.UUID, error) {
+	chatID := uuid.New()
+
 	stmt := `
-		INSERT INTO chats (user_id, created, last_activity)
-		VALUES (?, ?, ?)
+		INSERT INTO chats (id, user_id, created, last_activity)
+		VALUES (?, ?, ?, ?)
 	`
-	statement, err := m.DB.Prepare(stmt)
+	_, err := m.DB.Exec(stmt, chatID, userID, time.Now(), time.Now())
 	if err != nil {
-		return 0, err
-	}
-	
-	now := time.Now()
-	result, err := statement.Exec(userID, now, now)
-	if err != nil {
-		return 0, err
+		return uuid.Nil, err
 	}
 
-	id, err := result.LastInsertId()
-	if err != nil {
-		return 0, err
-	}
-	
-	return int(id), nil
+	return chatID, nil
 }
 
 // RetrieveByUserId gets all chats for a specific user
@@ -84,15 +77,18 @@ func (m *ChatModel) GetByID(id int) (*Chat, error) {
 		FROM chats
 		WHERE id = ?
 	`
-	
+
 	row := m.DB.QueryRow(stmt, id)
-	
+
 	c := &Chat{}
 	err := row.Scan(&c.ID, &c.UserID, &c.Created, &c.LastActivity)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
-	
+
 	return c, nil
 }
 

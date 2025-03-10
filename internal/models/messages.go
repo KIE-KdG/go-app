@@ -3,6 +3,8 @@ package models
 import (
 	"database/sql"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Message represents a single message in a chat
@@ -39,7 +41,7 @@ func (m *MessageModel) Insert(chatID int, senderID int, content string) error {
 }
 
 // GetByChatID retrieves all messages for a specific chat
-func (m *MessageModel) GetByChatID(chatID int) ([]*Message, error) {
+func (m *MessageModel) GetByChatID(chatID uuid.UUID) ([]*Message, error) {
 	stmt := `
 		SELECT m.id, m.chat_id, m.content, m.timestamp, 
 		       u.id, u.name, u.email

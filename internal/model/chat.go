@@ -21,7 +21,6 @@ type WebSocketRequest struct {
 }
 
 func (c *ChatPort) ForwardMessage(message string) (string, error) {
-
 	otherServer := "ws://localhost" + c.Port + "/ws/documents/search"
 	conn, _, err := websocket.DefaultDialer.Dial(otherServer, nil)
 	if err != nil {
