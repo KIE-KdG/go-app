@@ -46,10 +46,11 @@
                 <div class="text-sm text-blue-600 dark:text-blue-400"
                   x-text="message.statusUpdates[message.statusUpdates.length - 1]"></div>
 
+                <!-- Modified dropdown to be wider -->
                 <details class="dropdown mt-1" x-show="message.statusUpdates.length > 1">
                   <summary class="cursor-pointer text-xs text-blue-600 dark:text-blue-400">View all status updates
                   </summary>
-                  <div class="dropdown-content p-2 bg-white dark:bg-gray-700 rounded shadow">
+                  <div class="dropdown-content p-2 bg-white dark:bg-gray-700 rounded shadow w-64 md:w-96">
                     <template x-for="(status, i) in message.statusUpdates" :key="i">
                       <p class="text-sm text-black dark:text-white py-1" x-text="status"></p>
                     </template>
@@ -71,7 +72,7 @@
       </template>
     </div>
 
-    <!-- Chat Input Form -->
+    <!-- Chat Input Form with brighter background -->
     <div class="card bg-base-100 w-full shadow-xl sticky bottom-0 z-10">
       <div class="p-6 relative">
         <form @submit.prevent="sendMessage" class="relative w-full">
@@ -79,7 +80,7 @@
             <textarea id="messageInput" x-model="inputMessage"
               @keydown.enter.prevent="!isProcessing && inputMessage.trim() ? sendMessage() : null"
               placeholder="Type your message" :disabled="isProcessing" x-ref="messageInput" @input="autoResizeTextarea"
-              class="input w-full px-3 py-2 resize-none overflow-hidden rounded focus:outline-none focus:ring-2"
+              class="input w-full px-3 py-2 resize-none overflow-hidden rounded focus:outline-none focus:ring-2 bg-base-200 dark:bg-base-200"
               :class="{'opacity-75': isProcessing}" style="min-height: 60px; max-height: 200px;"></textarea>
           </div>
 
@@ -130,6 +131,7 @@
 </div>
 
 <script>
+  // Script section remains unchanged
   // Load marked.js for Markdown rendering
   if (!window.marked) {
     const script = document.createElement('script');
@@ -292,9 +294,6 @@
           this.scrollToBottom();
           this.autoResizeTextarea();
         });
-
-        // We no longer need the timeout as the LLM can take a long time
-        // If needed in the future, we can add a heartbeat check instead
       },
 
       scrollToBottom() {
@@ -354,7 +353,7 @@
 </script>
 
 <style>
-  /* Markdown content styling */
+  /* Markdown content styling remains unchanged */
   .markdown-content h1 {
     font-size: 1.8em;
     font-weight: bold;
