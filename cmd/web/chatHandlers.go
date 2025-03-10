@@ -37,6 +37,9 @@ func (app *application) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	app.infoLog.Print(chats)
+	app.infoLog.Print(messages)
+
 	data := app.newTemplateData(r)
 	data.Chats = chats
 	data.Messages = messages

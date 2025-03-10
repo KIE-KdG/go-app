@@ -9,7 +9,7 @@ import (
 
 // Chat represents a conversation between users
 type Chat struct {
-	ID          []byte 
+	ID          uuid.UUID
 	UserID      int
 	Messages    []Message
 	Created     time.Time
@@ -71,7 +71,7 @@ func (m *ChatModel) RetrieveByUserId(userId int) ([]*Chat, error) {
 }
 
 // GetByID retrieves a single chat by its ID
-func (m *ChatModel) GetByID(id int) (*Chat, error) {
+func (m *ChatModel) GetByID(id uuid.UUID) (*Chat, error) {
 	stmt := `
 		SELECT id, user_id, created, last_activity
 		FROM chats

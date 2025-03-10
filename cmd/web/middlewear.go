@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
+	"github.com/julienschmidt/httprouter"
 	"github.com/justinas/nosurf"
 )
 
@@ -63,4 +65,19 @@ func noSurf(next http.Handler) http.Handler {
 		Secure:   true,
 	})
 	return csrfHandler
+}
+
+type contextKey string
+
+const chatIDKey contextKey = "chatID"
+
+func chatIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			params := httprouter.ParamsFromContext(r.Context())
+			chatID := params.ByName("id")
+
+			ctx := context.WithValue(r.Context(), chatIDKey, chatID)
+			r = r.WithContext(ctx)
+			next.ServeHTTP(w, r)
+	})
 }

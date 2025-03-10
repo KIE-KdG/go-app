@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,7 +11,7 @@ import (
 // Message represents a single message in a chat
 type Message struct {
 	ID        int
-	ChatID    int
+	ChatID    uuid.UUID
 	Sender    User
 	Content   string
 	Timestamp time.Time
@@ -22,23 +23,25 @@ type MessageModel struct {
 }
 
 // Insert adds a new message to a chat
-func (m *MessageModel) Insert(chatID int, senderID int, content string) error {
+func (m *MessageModel) Insert(chatID uuid.UUID, senderID int, content string) error {
 	stmt := `
-		INSERT INTO messages (chat_id, sender_id, content, timestamp)
-		VALUES (?, ?, ?, ?)
+			INSERT INTO messages (chat_id, sender_id, content, timestamp)
+			VALUES (?, ?, ?, ?)
 	`
 	statement, err := m.DB.Prepare(stmt)
 	if err != nil {
-		return err
+			return fmt.Errorf("error preparing insert statement: %w", err)
 	}
-	
+	defer statement.Close()
+
 	_, err = statement.Exec(chatID, senderID, content, time.Now())
 	if err != nil {
-		return err
+			return fmt.Errorf("error executing insert statement: %w", err)
 	}
-	
+
 	return nil
 }
+
 
 // GetByChatID retrieves all messages for a specific chat
 func (m *MessageModel) GetByChatID(chatID uuid.UUID) ([]*Message, error) {

@@ -55,7 +55,7 @@
           <li><a>Recents</a></li>
           {{if .Chats}}
           {{range .Chats}}
-          <a href="/chat/{{.ID}}">{{humanDate .Created}}</a><br>
+          <a href='/chat/{{.ID}}'>{{humanDate .Created}}</a><br>
           {{end}}
           {{else}}
           <p>There's nothing to see here... yet!</p>

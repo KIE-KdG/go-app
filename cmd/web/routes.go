@@ -33,7 +33,7 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodGet, "/map", protected.ThenFunc(app.mapView))
 	router.Handler(http.MethodPost, "/api/chat", protected.ThenFunc(app.chatHandler))
 	router.Handler(http.MethodPost, "/api/geojson", protected.ThenFunc(app.geoJsonHandler))
-	router.Handler(http.MethodGet, "/ws", protected.ThenFunc(app.handleConnections))
+	router.Handler(http.MethodGet, "/ws/:id", chatIDMiddleware(protected.ThenFunc(app.handleConnections)))
 	router.Handler(http.MethodPost, "/user/logout", protected.ThenFunc(app.userLogoutPost))
 
 	//TODO add roles so that only admins can do following tasks

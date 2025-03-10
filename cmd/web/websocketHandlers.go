@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/julienschmidt/httprouter"
 )
 
 type LLMStreamResponse struct {
@@ -25,6 +27,18 @@ type WebSocketRequest struct {
 }
 
 func (app *application) handleConnections(w http.ResponseWriter, r *http.Request) {
+	userID := app.userIdFromSession(r)
+	params := httprouter.ParamsFromContext(r.Context())
+	chatID := params.ByName("id")
+	if chatID == "" {
+		app.errorLog.Println("chatID not found in URL parameters")
+		http.Error(w, "Chat ID not found", http.StatusInternalServerError)
+		return
+	}
+
+	app.infoLog.Printf("Chat ID: %s", chatID)
+
+	// Proceed with WebSocket upgrade and handling...
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		app.serverError(w, err)
@@ -46,15 +60,29 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 		}
 		app.infoLog.Printf("Received message: %s, DB: %t, Docs: %t", req.Message, req.DBUsed, req.DocsUsed)
 
+		chatUUID, err := uuid.Parse(chatID)
+		if err != nil {
+			app.errorLog.Printf("Could not pasrse into UUID: %s", chatID)
+			return
+		}
+
 		promptResponse, err := app.chatPort.ForwardMessageWithStream(req.Message, req.DBUsed, req.DocsUsed)
 		if err != nil {
 			app.serverError(w, err)
 			return
 		}
-		app.infoLog.Print(promptResponse)
+
+		app.messages.Insert(chatUUID, userID, req.Message)
 
 		for prompt := range promptResponse {
+			app.infoLog.Print(prompt)
 			finalResp := app.processPrompt(prompt)
+			
+			// assume 0 is bot/ai/llm
+			if finalResp.Answer != "" {
+				app.messages.Insert(chatUUID, 0, finalResp.Answer)
+			}
+
 			if err := sendJSON(ws, finalResp); err != nil {
 				app.errorLog.Println("write error:", err)
 				break

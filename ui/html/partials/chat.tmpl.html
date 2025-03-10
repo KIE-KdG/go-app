@@ -1,17 +1,24 @@
 {{define "chat"}}
 <div class="min-h-screen max-w-3xl mx-auto flex flex-col">
   <div x-data="chatApp()" x-init="init()" class="flex flex-col flex-1">
-    <!-- Chat messages container -->
+    <!-- Server-rendered Chat messages container with consistent styling -->
+
+    <!-- Dynamic Chat messages container -->
     <div id="chatMessages" class="flex-1 flex flex-col gap-3 px-4 pt-1 overflow-auto">
+      {{range .Messages}}
+      <div class="chat-message p-2 rounded shadow-md text-black dark:text-white"
+        :class="{'bg-blue-100 dark:bg-blue-900': message.sender === 'You', 'bg-green-100 dark:bg-green-900': message.sender === 'AI'}">
+        <pre class="message-text whitespace-pre-wrap text-black dark:text-white">{{.Content}}</pre>
+      </div>
+      {{end}}
       <template x-for="(message, index) in messages" :key="index">
         <div class="chat-message p-2 rounded shadow-md text-black dark:text-white"
           :class="{'bg-blue-100 dark:bg-blue-900': message.sender === 'You', 'bg-green-100 dark:bg-green-900': message.sender === 'AI'}">
-          <div class="sender font-bold" x-text="message.sender"></div>
+          <div class="sender font-bold" x-html="formatMessage(message.sender)"></div>
 
           <!-- AI Response Block -->
           <template x-if="message.sender === 'AI' && (message.statusUpdates || message.answer)">
             <div>
-              <!-- Status dropdown rendered if there is at least one status update -->
               <details class="dropdown open" x-show="message.statusUpdates.length > 0">
                 <summary class="cursor-pointer text-blue-600 dark:text-blue-400">Status Updates</summary>
                 <div class="dropdown-content p-2 bg-white dark:bg-gray-700">
@@ -20,7 +27,6 @@
                   </template>
                 </div>
               </details>
-              <!-- Final answer paragraph -->
               <template x-if="message.answer">
                 <pre class="message-text whitespace-pre-wrap text-black dark:text-white"
                   x-html="formatMessage(message.answer)"></pre>
@@ -37,7 +43,7 @@
       </template>
     </div>
 
-    <!-- Chat Input Form: always stays at the bottom -->
+    <!-- Chat Input Form -->
     <div class="card bg-base-100 w-full shadow-xl sticky bottom-0 z-10">
       <div class="p-6 relative">
         <form @submit.prevent="sendMessage" class="relative w-full">
@@ -91,13 +97,12 @@
       dbUsed: false,
       docsUsed: false,
       init() {
-        // Establish a WebSocket connection.
-        this.ws = new WebSocket('wss://localhost:4000/ws');
+        const chatID = window.location.pathname.split("/")[2];
+        this.ws = new WebSocket(`wss://localhost:4000/ws/${chatID}`);
         this.ws.addEventListener('open', () => {
           console.log('WebSocket connection established');
         });
         this.ws.addEventListener('message', (event) => {
-          console.log('Received:', event.data);
           let data = {};
           try {
             data = JSON.parse(event.data);
@@ -105,13 +110,11 @@
             console.error('Error parsing JSON:', event.data);
             return;
           }
-          // Append status updates to the current AI response block.
           if (data.status) {
             if (this.currentResponse) {
               this.currentResponse.statusUpdates.push(data.status.trim());
             }
           }
-          // When the answer is received, set it in the current block.
           if (data.answer) {
             if (!this.currentResponse) {
               this.messages.push({
@@ -122,10 +125,8 @@
               this.currentResponse = this.messages[this.messages.length - 1];
             }
             this.currentResponse.answer = data.answer;
-            // Reset currentResponse so subsequent statuses create a new block.
             this.currentResponse = null;
           }
-          // Auto-scroll to the bottom.
           this.$nextTick(() => {
             const chatMessages = document.getElementById('chatMessages');
             if (chatMessages) {
@@ -142,19 +143,16 @@
       },
       sendMessage() {
         if (!this.inputMessage.trim()) return;
-        // Add the user's message.
         this.messages.push({
           sender: 'You',
           text: this.inputMessage
         });
-        // Create a new pending AI response block.
         this.messages.push({
           sender: 'AI',
           statusUpdates: [],
           answer: ''
         });
         this.currentResponse = this.messages[this.messages.length - 1];
-        console.log("Sending message with dbUsed:", this.dbUsed, "docsUsed:", this.docsUsed);
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           this.ws.send(JSON.stringify({
             message: this.inputMessage,
@@ -167,12 +165,8 @@
         this.inputMessage = '';
       },
       formatMessage(message) {
-        // Convert URLs into clickable links with dark mode support.
         const urlRegex = /(https?:\/\/[^\s]+)/g;
         return message.replace(urlRegex, '<a href="$1" target="_blank" class="text-blue-600 dark:text-blue-400 underline">$1</a>');
-      },
-      formatMarkdown(text) {
-        return marked(text);
       }
     }
   }
