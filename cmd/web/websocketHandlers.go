@@ -27,7 +27,6 @@ type WebSocketRequest struct {
 }
 
 func (app *application) handleConnections(w http.ResponseWriter, r *http.Request) {
-	userID := app.userIdFromSession(r)
 	params := httprouter.ParamsFromContext(r.Context())
 	chatID := params.ByName("id")
 	if chatID == "" {
@@ -72,7 +71,7 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		app.messages.Insert(chatUUID, userID, req.Message)
+		app.messages.Insert(chatUUID, "You", req.Message)
 
 		for prompt := range promptResponse {
 			app.infoLog.Print(prompt)
@@ -80,7 +79,7 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 			
 			// assume 0 is bot/ai/llm
 			if finalResp.Answer != "" {
-				app.messages.Insert(chatUUID, 0, finalResp.Answer)
+				app.messages.Insert(chatUUID, "AI", finalResp.Answer)
 			}
 
 			if err := sendJSON(ws, finalResp); err != nil {

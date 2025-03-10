@@ -6,14 +6,23 @@
     <!-- Dynamic Chat messages container -->
     <div id="chatMessages" class="flex-1 flex flex-col gap-3 px-4 pt-1 overflow-auto">
       {{range .Messages}}
-      <div class="chat-message p-2 rounded shadow-md text-black dark:text-white"
-        :class="{'bg-blue-100 dark:bg-blue-900': message.sender === 'You', 'bg-green-100 dark:bg-green-900': message.sender === 'AI'}">
+      {{/* Compute background class based on sender type */}}
+      {{ $bgClass := "" }}
+      {{ if eq .SenderType "You" }}
+      {{ $bgClass = "bg-blue-100 dark:bg-blue-900" }}
+      {{ else if eq .SenderType "AI" }}
+      {{ $bgClass = "bg-green-100 dark:bg-green-900" }}
+      {{ end }}
+      <div class="chat-message p-2 rounded shadow-md text-black dark:text-white {{$bgClass}}">
+        <div class="sender font-bold">
+          {{ if eq .SenderType "You" }}You{{ else if eq .SenderType "AI" }}AI{{ end }}
+        </div>
         <pre class="message-text whitespace-pre-wrap text-black dark:text-white">{{.Content}}</pre>
       </div>
       {{end}}
       <template x-for="(message, index) in messages" :key="index">
         <div class="chat-message p-2 rounded shadow-md text-black dark:text-white"
-          :class="{'bg-blue-100 dark:bg-blue-900': message.sender === 'You', 'bg-green-100 dark:bg-green-900': message.sender === 'AI'}">
+          :class="{'bg-blue-100 dark:bg-blue-900': message.sender === 'You', 'bg-green-100 dark:bg-green-900': message.sender=== 'AI'}">
           <div class="sender font-bold" x-html="formatMessage(message.sender)"></div>
 
           <!-- AI Response Block -->
