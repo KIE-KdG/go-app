@@ -71,15 +71,16 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		app.messages.Insert(chatUUID, "You", req.Message)
+		
 
 		for prompt := range promptResponse {
 			app.infoLog.Print(prompt)
 			finalResp := app.processPrompt(prompt)
 			
-			// assume 0 is bot/ai/llm
 			if finalResp.Answer != "" {
+				app.messages.Insert(chatUUID, "You", req.Message)
 				app.messages.Insert(chatUUID, "AI", finalResp.Answer)
+				app.chats.UpdateLastActivity(chatUUID)
 			}
 
 			if err := sendJSON(ws, finalResp); err != nil {

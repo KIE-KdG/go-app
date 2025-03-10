@@ -93,7 +93,7 @@ func (m *ChatModel) GetByID(id uuid.UUID) (*Chat, error) {
 }
 
 // UpdateLastActivity updates the last_activity timestamp of a chat
-func (m *ChatModel) UpdateLastActivity(chatID int) error {
+func (m *ChatModel) UpdateLastActivity(chatID uuid.UUID) error {
 	stmt := `
 		UPDATE chats
 		SET last_activity = ?

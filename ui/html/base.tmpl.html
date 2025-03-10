@@ -34,7 +34,16 @@
       <label for="my-drawer" aria-label="close sidebar" class="drawer-overlay group-hover:block"></label>
       <ul class="menu bg-base-200 text-base-content min-h-full w-80 p-4 ">
         <!-- Sidebar content here -->
-        {{template "logo" .}}
+        <div class="flex">
+          <div class="flex-auto h-auto">
+            {{template "drawerButton"}}
+          </div>
+          <div class="flex-auto">
+            {{template "logo" .}}
+          </div>
+
+        </div>
+
         <li>
           <form action="/chat" method="post">
             <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
@@ -56,6 +65,7 @@
           {{if .Chats}}
           {{range .Chats}}
           <a href='/chat/{{.ID}}'>{{humanDate .Created}}</a><br>
+          <p>{{.ID}}</p>
           {{end}}
           {{else}}
           <p>There's nothing to see here... yet!</p>

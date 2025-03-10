@@ -2,9 +2,11 @@
 <nav>
   <div class="navbar bg-base-100">
     <div class="navbar-start">
-      <!-- Logo -->
+      {{template "drawerButton"}}
       {{template "logo" .}}
+
     </div>
+
     <div class="flex-none">
       <!-- Navigation Links -->
       <ul class="menu menu-horizontal px-1">
@@ -22,7 +24,8 @@
 
     <div class="navbar-end mx-auto flex items-center">
       <!-- Theme Toggle -->
-      <input type="checkbox" id="theme-toggle" value="waaterweg-dark" class="toggle theme-controller" onchange="toggleTheme(this)">
+      <input type="checkbox" id="theme-toggle" value="waaterweg-dark" class="toggle theme-controller"
+        onchange="toggleTheme(this)">
       <script>
         // Function to update theme and save the choice in localStorage
         function toggleTheme(element) {
@@ -35,7 +38,7 @@
           }
         }
         // Set the toggle state based on the saved theme when the page loads
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
           const savedTheme = localStorage.getItem('theme') || 'waaterweg';
           if (savedTheme === 'waaterweg-dark') {
             document.getElementById('theme-toggle').checked = true;
