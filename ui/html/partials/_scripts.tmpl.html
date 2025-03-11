@@ -1,0 +1,482 @@
+{{define "scripts"}}
+<script>
+  // Load marked.js for Markdown rendering
+  if (!window.marked) {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.4/marked.min.js';
+    script.async = true;
+    document.head.appendChild(script);
+  }
+
+  function chatApp() {
+    return {
+      ws: null,
+      inputMessage: '',
+      messages: [],
+      currentResponse: null,
+      dbUsed: false,
+      docsUsed: false,
+      isProcessing: false,
+      reconnectAttempts: 0,
+      maxReconnectAttempts: 5,
+      reconnectTimeout: null,
+      showScrollButton: false,
+      responseStartTime: null,
+      hasMap: false, // Track if we have a map to show
+      mapVisible: true, // Whether the side map is visible (can be toggled)
+      
+      init() {
+        this.connectWebSocket();
+        this.$nextTick(() => {
+          this.scrollToBottom();
+          this.autoResizeTextarea();
+        });
+        
+        // Add resize event to handle the map resizing
+        window.addEventListener('resize', () => {
+          if (this.hasMap && this.mapVisible) {
+            this.refreshMap();
+          }
+        });
+      },
+      
+      // Method to interrupt the generation
+      interruptGeneration() {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN && this.isProcessing) {
+          // Send interrupt command to the server
+          this.ws.send(JSON.stringify({
+            interrupt: true
+          }));
+          
+          // Update the current response to show it was interrupted
+          if (this.currentResponse) {
+            this.currentResponse.statusUpdates.push("Generation interrupted by user.");
+            
+            // Finalize the current response even if incomplete
+            if (this.responseStartTime) {
+              const responseTime = new Date() - this.responseStartTime;
+              this.currentResponse.responseTime = this.formatResponseTime(responseTime) + " (interrupted)";
+              this.responseStartTime = null;
+            }
+            
+            // If there's no answer yet, add a message indicating interruption
+            if (!this.currentResponse.answer) {
+              this.currentResponse.answer = "*Generation was interrupted.*";
+            }
+            
+            this.currentResponse = null;
+          }
+          
+          // Reset processing state immediately
+          this.isProcessing = false;
+        }
+      },
+      
+      // Refreshes the side map if needed
+      refreshMap() {
+        if (this.hasMap && this.mapVisible) {
+          // Force Leaflet to recalculate map size
+          setTimeout(() => {
+            const container = document.getElementById('side-map-container');
+            if (container && container._leaflet_id) {
+              const map = L.DomUtil.get('side-map-container')._leaflet;
+              if (map) {
+                map.invalidateSize();
+              }
+            }
+          }, 300);
+        }
+      },
+
+      // Initialize map with GeoJSON data
+      initMap(mapId, geoJSONData) {
+        console.log("Initializing map:", mapId);
+        
+        // Use setTimeout to ensure the DOM is fully ready
+        setTimeout(() => {
+          const mapContainer = document.getElementById(mapId);
+          
+          if (!mapContainer) {
+            console.error("Map container not found:", mapId);
+            return;
+          }
+          
+          try {
+            // If map already initialized, don't re-initialize
+            if (mapContainer._leaflet_id) {
+              console.log("Map already initialized:", mapId);
+              return;
+            }
+            
+            // Initialize the map
+            const map = L.map(mapId, {
+              center: [0, 0],
+              zoom: 2
+            });
+            
+            // Add OpenStreetMap tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+            
+            // Parse and add the GeoJSON data if it exists
+            if (geoJSONData && typeof geoJSONData !== 'undefined') {
+              // Convert string to object if needed
+              const geoJSON = (typeof geoJSONData === 'string') ? 
+                JSON.parse(geoJSONData) : geoJSONData;
+
+              console.log("GeoJSON data:", geoJSON);
+              
+              if (geoJSON) {
+                try {
+                  // Create a GeoJSON layer
+                  const geoLayer = L.geoJSON(geoJSON).addTo(map);
+                  
+                  // Try to fit bounds if possible
+                  if (geoLayer && geoLayer.getBounds && typeof geoLayer.getBounds === 'function') {
+                    const bounds = geoLayer.getBounds();
+                    if (bounds && !bounds.isEmpty && !bounds.isEmpty()) {
+                      map.fitBounds(bounds, { padding: [30, 30] });
+                    }
+                  }
+                } catch (e) {
+                  console.error("Error adding GeoJSON layer:", e);
+                }
+              } else {
+                console.error("Invalid GeoJSON data");
+              }
+            } else {
+              console.warn("No GeoJSON data provided");
+              
+              // Add a marker at the center as fallback
+              L.marker([0, 0]).addTo(map)
+                .bindPopup("No GeoJSON data available")
+                .openPopup();
+            }
+            
+            // Force map to redraw
+            setTimeout(() => {
+              map.invalidateSize();
+              console.log("Map size refreshed");
+            }, 100);
+            
+            console.log("Map initialization complete for:", mapId);
+            
+            // Also initialize side map if this is the first GeoJSON we've received
+            if (this.hasMap && mapId.includes('mobile-map') && !document.getElementById('side-map-container')._leaflet_id) {
+              this.initSideMap(geoJSONData);
+            }
+          } catch (e) {
+            console.error('Error initializing map:', e);
+          }
+        }, 100); // Short delay to ensure DOM is ready
+      },
+      
+      // Initialize the side map (for desktop view)
+      initSideMap(geoJSONData) {
+        console.log("Initializing side map");
+        
+        // Use setTimeout to ensure the DOM is fully ready
+        setTimeout(() => {
+          const sideMapContainer = document.getElementById('side-map-container');
+          
+          if (!sideMapContainer) {
+            console.error("Side map container not found");
+            return;
+          }
+          
+          try {
+            // Check if map already exists
+            if (sideMapContainer._leaflet_id) {
+              console.log("Side map already initialized");
+              return;
+            }
+            
+            // Initialize the map
+            const sideMap = L.map('side-map-container', {
+              center: [0, 0],
+              zoom: 2
+            });
+            
+            // Add OpenStreetMap tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(sideMap);
+            
+            // Parse and add the GeoJSON data if it exists
+            if (geoJSONData && typeof geoJSONData !== 'undefined') {
+              // Convert string to object if needed
+              const geoJSON = (typeof geoJSONData === 'string') ? 
+                JSON.parse(geoJSONData) : geoJSONData;
+              
+              console.log("GeoJSON data for side map:", geoJSON);
+              
+              if (geoJSON) {
+                try {
+                  // Create a GeoJSON layer
+                  const geoLayer = L.geoJSON(geoJSON).addTo(sideMap);
+                  
+                  // Try to fit bounds if possible
+                  if (geoLayer && geoLayer.getBounds && typeof geoLayer.getBounds === 'function') {
+                    const bounds = geoLayer.getBounds();
+                    if (bounds && !bounds.isEmpty && !bounds.isEmpty()) {
+                      sideMap.fitBounds(bounds, { padding: [30, 30] });
+                    }
+                  }
+                } catch (e) {
+                  console.error("Error adding GeoJSON layer to side map:", e);
+                }
+              } else {
+                console.error("Invalid GeoJSON data for side map");
+              }
+            } else {
+              console.warn("No GeoJSON data provided for side map");
+              
+              // Add a marker at the center as fallback
+              L.marker([0, 0]).addTo(sideMap)
+                .bindPopup("No GeoJSON data available")
+                .openPopup();
+            }
+            
+            // Force map to redraw
+            setTimeout(() => {
+              sideMap.invalidateSize();
+              console.log("Side map size refreshed");
+            }, 100);
+            
+            console.log("Side map initialization complete");
+          } catch (e) {
+            console.error('Error initializing side map:', e);
+          }
+        }, 300); // Longer delay for side map to ensure container is visible
+      },
+
+      connectWebSocket() {
+        const chatID = window.location.pathname.split("/")[2];
+        this.ws = new WebSocket(`wss://localhost:4000/ws/${chatID}`);
+
+        this.ws.addEventListener('open', () => {
+          console.log('WebSocket connection established');
+          this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+        });
+
+        this.ws.addEventListener('message', (event) => {
+          let data = {};
+          try {
+            data = JSON.parse(event.data);
+          } catch (e) {
+            console.error('Error parsing JSON:', event.data);
+            return;
+          }
+
+          // Handle possible interruption acknowledgment
+          if (data.interrupted) {
+            console.log("Server acknowledged interruption");
+            this.isProcessing = false;
+            
+            if (this.currentResponse) {
+              if (!this.currentResponse.answer) {
+                this.currentResponse.answer = "*Generation was interrupted.*";
+              }
+              
+              if (this.responseStartTime) {
+                const responseTime = new Date() - this.responseStartTime;
+                this.currentResponse.responseTime = this.formatResponseTime(responseTime) + " (interrupted)";
+                this.responseStartTime = null;
+              }
+              
+              this.currentResponse = null;
+            }
+            
+            return;
+          }
+
+          // Create response object if it doesn't exist yet
+          if (!this.currentResponse) {
+            this.messages.push({
+              sender: 'AI',
+              statusUpdates: [],
+              answer: '',
+              geoJSON: null
+            });
+            this.currentResponse = this.messages[this.messages.length - 1];
+          }
+
+          // Handle status updates
+          if (data.status) {
+            this.currentResponse.statusUpdates.push(data.status.trim());
+          }
+
+          // Handle answer data
+          if (data.answer) {
+            this.currentResponse.answer = data.answer;
+          }
+
+          // Handle GeoJSON data
+          if (data.geoJSON) {
+            console.log("Received GeoJSON data");
+            this.currentResponse.geoJSON = data.geoJSON;
+            this.hasMap = true; // Set hasMap to true when we get GeoJSON data
+            
+            // Refresh layout to accommodate map
+            this.$nextTick(() => {
+              this.refreshMap();
+            });
+          }
+
+          // Finalize the response if we have answer or GeoJSON
+          if (data.answer || data.geoJSON) {
+            // Calculate response time
+            if (this.responseStartTime) {
+              const responseTime = new Date() - this.responseStartTime;
+              this.currentResponse.responseTime = this.formatResponseTime(responseTime);
+              this.responseStartTime = null;
+            }
+            
+            this.currentResponse = null;
+            this.isProcessing = false;
+          }
+
+          this.$nextTick(() => {
+            this.scrollToBottom();
+          });
+        });
+
+        this.ws.addEventListener('close', (event) => {
+          console.log('WebSocket connection closed', event);
+
+          // If we were in the middle of a response, mark it as incomplete
+          if (this.isProcessing) {
+            if (this.currentResponse) {
+              this.currentResponse.statusUpdates.push("Connection closed unexpectedly. Please try again.");
+              this.currentResponse.answer = this.currentResponse.answer || "Response interrupted. Please try again.";
+
+              // Add response time even for incomplete responses
+              if (this.responseStartTime) {
+                const responseTime = new Date() - this.responseStartTime;
+                this.currentResponse.responseTime = this.formatResponseTime(responseTime) + " (incomplete)";
+                this.responseStartTime = null;
+              }
+
+              this.currentResponse = null;
+            }
+            this.isProcessing = false;
+          }
+
+          // Attempt to reconnect if not a normal closure and within max attempts
+          if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
+            const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), 10000);
+            console.log(`Attempting to reconnect in ${delay}ms...`);
+
+            this.reconnectTimeout = setTimeout(() => {
+              this.reconnectAttempts++;
+              this.connectWebSocket();
+            }, delay);
+          }
+        });
+
+        this.ws.addEventListener('error', (error) => {
+          console.error('WebSocket error:', error);
+        });
+      },
+
+      sendMessage() {
+        if (!this.inputMessage.trim() || this.isProcessing) return;
+
+        // Check WebSocket state
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+          console.error('WebSocket is not open');
+          // Try to reconnect
+          if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+          }
+          this.connectWebSocket();
+          return;
+        }
+
+        this.isProcessing = true; // Disable input form while processing
+        this.responseStartTime = new Date(); // Start timing the response
+
+        this.messages.push({
+          sender: 'You',
+          text: this.inputMessage
+        });
+
+        this.messages.push({
+          sender: 'AI',
+          statusUpdates: [],
+          answer: '',
+          geoJSON: null
+        });
+
+        this.currentResponse = this.messages[this.messages.length - 1];
+
+        this.ws.send(JSON.stringify({
+          message: this.inputMessage,
+          dbUsed: this.dbUsed,
+          docsUsed: this.docsUsed
+        }));
+
+        this.inputMessage = '';
+        this.$nextTick(() => {
+          this.scrollToBottom();
+          this.autoResizeTextarea();
+        });
+      },
+
+      scrollToBottom() {
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+      },
+
+      checkScroll() {
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+          // Show button if user has scrolled up at least 200px from bottom
+          this.showScrollButton = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight > 200;
+        }
+      },
+
+      formatResponseTime(milliseconds) {
+        if (milliseconds < 1000) {
+          return `${milliseconds}ms`;
+        } else if (milliseconds < 60000) {
+          return `${(milliseconds / 1000).toFixed(1)}s`;
+        } else {
+          const minutes = Math.floor(milliseconds / 60000);
+          const seconds = ((milliseconds % 60000) / 1000).toFixed(1);
+          return `${minutes}m ${seconds}s`;
+        }
+      },
+
+      formatMarkdown(text) {
+        if (!text) return '';
+        // Make sure marked is loaded
+        if (window.marked) {
+          try {
+            return window.marked.parse(text);
+          } catch (e) {
+            console.error('Error parsing markdown:', e);
+            return text;
+          }
+        }
+        return text; // Fallback if marked.js isn't loaded yet
+      },
+
+      autoResizeTextarea() {
+        const textarea = this.$refs.messageInput;
+        if (textarea) {
+          // Reset height to get proper scrollHeight
+          textarea.style.height = 'auto';
+
+          // Set new height (with min/max constraints handled by CSS)
+          const newHeight = Math.min(Math.max(textarea.scrollHeight, 60), 200);
+          textarea.style.height = `${newHeight}px`;
+        }
+      }
+    }
+  }
+</script>
+{{end}}

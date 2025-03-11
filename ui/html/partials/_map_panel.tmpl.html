@@ -1,0 +1,11 @@
+{{define "map_panel"}}
+<!-- Map panel (col-span-1 when visible) -->
+<div x-show="hasMap && mapVisible" class="col-span-1 relative hidden md:block">
+  <div class="sticky top-0 h-screen p-4">
+    <div class="h-full flex flex-col">
+      <h3 class="text-lg font-bold mb-2">Map Visualization</h3>
+      <div id="side-map-container" class="flex-1 rounded-lg shadow-md overflow-hidden"></div>
+    </div>
+  </div>
+</div>
+{{end}}

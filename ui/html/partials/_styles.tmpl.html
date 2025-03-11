@@ -1,0 +1,128 @@
+{{define "styles"}}
+<style>
+  /* Ensure Leaflet is styled properly */
+  #side-map-container {
+    min-height: 300px;
+    height: calc(100vh - 120px);
+    width: 100%;
+    z-index: 1;
+  }
+  
+  [class*="mobile-map-"] {
+    min-height: 250px;
+  }
+  
+  /* Markdown content styling */
+  .markdown-content h1 {
+    font-size: 1.8em;
+    font-weight: bold;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+  }
+
+  .markdown-content h2 {
+    font-size: 1.5em;
+    font-weight: bold;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+  }
+
+  .markdown-content h3 {
+    font-size: 1.3em;
+    font-weight: bold;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+  }
+
+  .markdown-content h4 {
+    font-size: 1.1em;
+    font-weight: bold;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+  }
+
+  .markdown-content p {
+    margin-bottom: 1em;
+  }
+
+  .markdown-content ul,
+  .markdown-content ol {
+    margin-left: 2em;
+    margin-bottom: 1em;
+  }
+
+  .markdown-content ul {
+    list-style-type: disc;
+  }
+
+  .markdown-content ol {
+    list-style-type: decimal;
+  }
+
+  .markdown-content li {
+    margin-bottom: 0.5em;
+  }
+
+  .markdown-content pre {
+    background-color: #f0f0f0;
+    padding: 0.5em;
+    border-radius: 0.25em;
+    overflow-x: auto;
+    margin-bottom: 1em;
+  }
+
+  .markdown-content code {
+    font-family: monospace;
+    background-color: #f0f0f0;
+    padding: 0.2em 0.4em;
+    border-radius: 0.25em;
+  }
+
+  .markdown-content pre code {
+    padding: 0;
+    background-color: transparent;
+  }
+
+  .markdown-content blockquote {
+    border-left: 4px solid #ccc;
+    padding-left: 1em;
+    margin-left: 0;
+    margin-bottom: 1em;
+  }
+
+  .markdown-content a {
+    color: #3182ce;
+    text-decoration: underline;
+  }
+
+  .markdown-content table {
+    border-collapse: collapse;
+    margin-bottom: 1em;
+  }
+
+  .markdown-content th,
+  .markdown-content td {
+    border: 1px solid #ccc;
+    padding: 0.5em;
+  }
+
+  /* Dark mode adjustments */
+  .dark .markdown-content pre,
+  .dark .markdown-content code {
+    background-color: #2d3748;
+  }
+
+  .dark .markdown-content a {
+    color: #63b3ed;
+  }
+
+  .dark .markdown-content blockquote {
+    border-left-color: #4a5568;
+  }
+
+  .dark .markdown-content th,
+  .dark .markdown-content td {
+    border-color: #4a5568;
+  }
+</style>
+{{end}}

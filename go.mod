@@ -8,6 +8,7 @@ require (
 	github.com/alexedwards/scs/v2 v2.8.0
 	github.com/charmbracelet/bubbletea v1.3.4
 	github.com/go-playground/form/v4 v4.2.1
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/justinas/alice v1.2.0
@@ -17,6 +18,7 @@ require (
 	github.com/tmc/langchaingo v0.1.13
 	golang.org/x/crypto v0.33.0
 	golang.org/x/text v0.22.0
+	golang.org/x/time v0.5.0
 )
 
 require (
@@ -26,7 +28,6 @@ require (
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
