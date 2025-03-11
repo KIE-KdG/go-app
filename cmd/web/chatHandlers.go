@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -19,10 +18,9 @@ func (app *application) chat(w http.ResponseWriter, r *http.Request) {
 
 	idStr := params.ByName("id")
 
-	uuid, err := uuid.Parse(idStr)
-	if err != nil {
-			app.notFound(w)
-			return
+	uuid, ok := app.parseUUID(w, idStr)
+	if !ok {
+		return
 	}
 
 	chats, err := app.chats.RetrieveByUserId(userID)
@@ -92,8 +90,7 @@ func (app *application) chatHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req ChatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		app.clientError(w, http.StatusNotAcceptable)
+	if err := app.readJSON(w, r, &req); err != nil {
 		return
 	}
 
@@ -110,8 +107,7 @@ func (app *application) chatHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := ChatResponse{Response: promptResponse}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(res)
+	app.writeJSON(w, http.StatusOK, res)
 }
 
 func (app *application) geoJsonHandler(w http.ResponseWriter, r *http.Request) {
@@ -127,9 +123,5 @@ func (app *application) geoJsonHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(geoData); err != nil {
-		app.serverError(w, err)
-		return
-	}
+	app.writeJSON(w, http.StatusOK, geoData)
 }

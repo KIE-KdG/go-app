@@ -36,28 +36,22 @@ func (app *application) userSignupPost(w http.ResponseWriter, r *http.Request) {
 	form.CheckField(validator.MinChars(form.Password, 8), "password", "This field must be at least 8 characters long")
 
 	if !form.Valid() {
-		data := app.newTemplateData(r)
-		data.Form = form
-		app.render(w, http.StatusUnprocessableEntity, "signup.tmpl.html", data)
+		app.renderFormErrors(w, r, form, "signup.tmpl.html")
 		return
 	}
+	
 	err = app.users.Insert(form.Name, form.Email, form.Password)
 	if err != nil {
 		if errors.Is(err, models.ErrDuplicateEmail) {
 			form.AddFieldError("email", "Email address is already in use")
-
-			data := app.newTemplateData(r)
-			data.Form = form
-			app.render(w, http.StatusUnprocessableEntity, "signup.tmpl.html", data)
+			app.renderFormErrors(w, r, form, "signup.tmpl.html")
 		} else {
 			app.serverError(w, err)
 		}
 		return
 	}
 
-	app.sessionManager.Put(r.Context(), "flash", "Your signup was succesfull. Please log in.")
-
-	http.Redirect(w, r, "/user/login", http.StatusSeeOther)
+	app.setFlashAndRedirect(w, r, "Your signup was successful. Please log in.", "/user/login", http.StatusSeeOther)
 }
 
 type userLoginForm struct {
@@ -86,9 +80,7 @@ func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
 	form.CheckField(validator.NotBlank(form.Password), "password", "This field cannot be blank")
 
 	if !form.Valid() {
-		data := app.newTemplateData(r)
-		data.Form = form
-		app.render(w, http.StatusUnprocessableEntity, "login.tmpl.html", data)
+		app.renderFormErrors(w, r, form, "login.tmpl.html")
 		return
 	}
 
@@ -96,10 +88,7 @@ func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, models.ErrInvalidCredentials) {
 			form.AddNonFieldError("Email or password incorrect")
-
-			data := app.newTemplateData(r)
-			data.Form = form
-			app.render(w, http.StatusUnprocessableEntity, "login.tmpl.html", data)
+			app.renderFormErrors(w, r, form, "login.tmpl.html")
 		} else {
 			app.serverError(w, err)
 		}
@@ -126,9 +115,5 @@ func (app *application) userLogoutPost(w http.ResponseWriter, r *http.Request) {
 
 	app.sessionManager.Remove(r.Context(), "authenticatedUserID")
 
-	app.sessionManager.Put(r.Context(), "flash", "You have been logger out succesfully")
-
-	http.Redirect(w,r, "/", http.StatusSeeOther)
+	app.setFlashAndRedirect(w, r, "You have been logged out successfully", "/", http.StatusSeeOther)
 }
-
-

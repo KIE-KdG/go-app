@@ -18,8 +18,6 @@ func (app *application) adminPanel(w http.ResponseWriter, r *http.Request) {
 	app.render(w, http.StatusOK, "admin.tmpl.html", data)
 }
 
-
-
 func (app *application) uploadPost(w http.ResponseWriter, r *http.Request) {
 	var form adminPanelForm
 
@@ -30,10 +28,7 @@ func (app *application) uploadPost(w http.ResponseWriter, r *http.Request) {
 
 	r.ParseMultipartForm(10 << 20)
 
-	if !form.Valid() {
-		data := app.newTemplateData(r)
-		data.Form = form
-		app.render(w, http.StatusUnprocessableEntity, "admin.tmpl.html", data)
+	if !app.processFormValidation(w, r, form, "admin.tmpl.html") {
 		return
 	}
 

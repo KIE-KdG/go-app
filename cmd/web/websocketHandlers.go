@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -79,7 +77,7 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 					// Send interrupt signal by closing the channel
 					close(interrupt)
 					// Send acknowledgment back to client
-					if err := sendJSON(ws, FinalResponse{Interrupted: true}); err != nil {
+					if err := sendWSJSON(ws, FinalResponse{Interrupted: true}); err != nil {
 						app.errorLog.Println("error sending interrupt acknowledgment:", err)
 					}
 				}
@@ -90,9 +88,8 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 			// Regular message handling
 			app.infoLog.Printf("Received message: %s, DB: %t, Docs: %t", req.Message, req.DBUsed, req.DocsUsed)
 
-			chatUUID, err := uuid.Parse(chatID)
-			if err != nil {
-				app.errorLog.Printf("Could not parse into UUID: %s", chatID)
+			chatUUID, ok := app.parseUUID(w, chatID)
+			if !ok {
 				continue
 			}
 
@@ -113,7 +110,7 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 				promptResponse, err := app.chatPort.ForwardMessageWithStream(req.Message, req.DBUsed, req.DocsUsed)
 				if err != nil {
 					app.errorLog.Printf("Error forwarding message: %v", err)
-					if err := sendJSON(ws, FinalResponse{Status: "Error: " + err.Error()}); err != nil {
+					if err := sendWSJSON(ws, FinalResponse{Status: "Error: " + err.Error()}); err != nil {
 						app.errorLog.Println("write error:", err)
 					}
 					return
@@ -140,7 +137,7 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 							finalAnswer = finalResp.Answer
 						}
 
-						if err := sendJSON(ws, finalResp); err != nil {
+						if err := sendWSJSON(ws, finalResp); err != nil {
 							app.errorLog.Println("write error:", err)
 							break processLoop
 						}
@@ -154,7 +151,7 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 							Answer: finalAnswer, // Include any partial answer we have
 						}
 						
-						if err := sendJSON(ws, finalResp); err != nil {
+						if err := sendWSJSON(ws, finalResp); err != nil {
 							app.errorLog.Println("write error:", err)
 						}
 						
@@ -183,43 +180,34 @@ func parseWSRequest(msg []byte) (WebSocketRequest, error) {
 	return req, err
 }
 
-// sendJSON marshals the given data and sends it as a TextMessage.
-func sendJSON(ws *websocket.Conn, data interface{}) error {
-	jsonRes, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-	return ws.WriteMessage(websocket.TextMessage, jsonRes)
-}
-
 // Process the prompt and return a FinalResponse
 func (app *application) processPrompt(prompt string) FinalResponse {
 	var streamResp LLMStreamResponse
 	var response FinalResponse
 
 	if err := json.Unmarshal([]byte(prompt), &streamResp); err != nil {
-			app.errorLog.Println("error unmarshaling LLM response:", err)
-			// Fallback: return the raw prompt as a status.
-			response = FinalResponse{Status: prompt}
+		app.errorLog.Println("error unmarshaling LLM response:", err)
+		// Fallback: return the raw prompt as a status.
+		response = FinalResponse{Status: prompt}
 	} else if streamResp.Status != "" {
-			// For status updates, don't include GeoJSON
-			response = FinalResponse{Status: streamResp.Status}
+		// For status updates, don't include GeoJSON
+		response = FinalResponse{Status: streamResp.Status}
 	} else if streamResp.Result != "" && streamResp.Details != "" {
-			// For final answers, include both answer and GeoJSON
-			var detailsMap map[string]interface{}
-			if err := json.Unmarshal([]byte(streamResp.Details), &detailsMap); err == nil {
-					if answer, ok := detailsMap["answer"].(string); ok {
-							response = FinalResponse{Answer: answer}
-							
-							// Include the dummy GeoJSON only with the final answer
-							dummyGeoJSON, err := app.getDummyGeoJSON()
-							if err == nil {
-									response.GeoJSON = dummyGeoJSON
-							} else {
-									app.errorLog.Printf("Failed to load dummy GeoJSON: %v", err)
-							}
-					}
+		// For final answers, include both answer and GeoJSON
+		var detailsMap map[string]interface{}
+		if err := json.Unmarshal([]byte(streamResp.Details), &detailsMap); err == nil {
+			if answer, ok := detailsMap["answer"].(string); ok {
+				response = FinalResponse{Answer: answer}
+				
+				// Include the dummy GeoJSON only with the final answer
+				dummyGeoJSON, err := app.getDummyGeoJSON()
+				if err == nil {
+					response.GeoJSON = dummyGeoJSON
+				} else {
+					app.errorLog.Printf("Failed to load dummy GeoJSON: %v", err)
+				}
 			}
+		}
 	}
 	
 	return response
