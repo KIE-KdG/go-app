@@ -268,7 +268,7 @@
             console.error('Error parsing JSON:', event.data);
             return;
           }
-
+        
           // Handle possible interruption acknowledgment
           if (data.interrupted) {
             console.log("Server acknowledged interruption");
@@ -290,7 +290,7 @@
             
             return;
           }
-
+        
           // Create response object if it doesn't exist yet
           if (!this.currentResponse) {
             this.messages.push({
@@ -301,31 +301,65 @@
             });
             this.currentResponse = this.messages[this.messages.length - 1];
           }
-
+        
           // Handle status updates
           if (data.status) {
             this.currentResponse.statusUpdates.push(data.status.trim());
           }
-
-          // Handle answer data
-          if (data.answer) {
-            this.currentResponse.answer = data.answer;
+        
+          // Handle answer data (look for both answer and response fields)
+          if (data.answer || data.response) {
+            this.currentResponse.answer = data.answer || data.response;
           }
-
+        
           // Handle GeoJSON data
           if (data.geoJSON) {
             console.log("Received GeoJSON data");
-            this.currentResponse.geoJSON = data.geoJSON;
+            
+            let parsedGeoJSON = data.geoJSON;
+            // If it's a string, parse it
+            if (typeof data.geoJSON === 'string') {
+              try {
+                parsedGeoJSON = JSON.parse(data.geoJSON);
+                console.log("Parsed GeoJSON from string");
+              } catch (e) {
+                console.error("Failed to parse GeoJSON string:", e);
+              }
+            }
+            
+            this.currentResponse.geoJSON = parsedGeoJSON;
             this.hasMap = true; // Set hasMap to true when we get GeoJSON data
             
-            // Refresh layout to accommodate map
+            // Initialize map after a short delay to ensure DOM is ready
             this.$nextTick(() => {
-              this.refreshMap();
+              console.log("Ready to initialize map");
+              // If we have a side-map-container and it's visible, initialize it
+              const sideMapEl = document.getElementById('side-map-container');
+              if (sideMapEl && this.mapVisible) {
+                console.log("Initializing side map");
+                this.initMap('side-map-container', parsedGeoJSON);
+              }
+              
+              // Find the current mobile map element
+              const currentIndex = this.messages.indexOf(this.currentResponse);
+              if (currentIndex >= 0) {
+                const mobileMapId = `mobile-map-${currentIndex}`;
+                console.log("Mobile map ID:", mobileMapId);
+                
+                // Wait a bit longer to ensure the mobile map is in the DOM
+                setTimeout(() => {
+                  const mobileMapEl = document.getElementById(mobileMapId);
+                  if (mobileMapEl) {
+                    console.log("Initializing mobile map");
+                    this.initMap(mobileMapId, parsedGeoJSON);
+                  }
+                }, 300);
+              }
             });
           }
-
+        
           // Finalize the response if we have answer or GeoJSON
-          if (data.answer || data.geoJSON) {
+          if (data.answer || data.response || data.geoJSON) {
             // Calculate response time
             if (this.responseStartTime) {
               const responseTime = new Date() - this.responseStartTime;
@@ -336,7 +370,7 @@
             this.currentResponse = null;
             this.isProcessing = false;
           }
-
+        
           this.$nextTick(() => {
             this.scrollToBottom();
           });

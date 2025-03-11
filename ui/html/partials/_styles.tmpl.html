@@ -1,4 +1,14 @@
 {{define "styles"}}
+<!-- Add Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+  crossorigin=""/>
+
+<!-- Add Leaflet JavaScript (Make sure it loads before any map initialization) -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+  crossorigin=""></script>
+
 <style>
   /* Ensure Leaflet is styled properly */
   #side-map-container {
@@ -10,6 +20,20 @@
   
   [class*="mobile-map-"] {
     min-height: 250px;
+  }
+  
+  /* Leaflet marker and control styles need specificity to override Leaflet defaults */
+  .leaflet-marker-icon {
+    visibility: visible !important;
+  }
+  
+  .leaflet-control-zoom {
+    visibility: visible !important;
+  }
+  
+  /* Fix any potential z-index issues with map controls */
+  .leaflet-top, .leaflet-bottom {
+    z-index: 400 !important;
   }
   
   /* Markdown content styling */

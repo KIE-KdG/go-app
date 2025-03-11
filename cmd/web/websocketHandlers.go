@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -250,28 +249,24 @@ func (app *application) processPrompt(prompt string) FinalResponse {
 			if len(combinedResponse.GeoObjects) > 0 {
 				response.GeoObjects = combinedResponse.GeoObjects
 				
-				// Convert geo_objects to a single FeatureCollection for frontend compatibility
-				// This creates a unified GeoJSON that Leaflet can directly use
-				allFeatures := []interface{}{}
+				// Create a simplified single FeatureCollection from geo_objects
+				// The frontend expects a standard GeoJSON FeatureCollection
+				var allFeatures []json.RawMessage
+				
+				// Log the raw GeoObjects for debugging
+				app.infoLog.Printf("Received GeoObjects: %+v", combinedResponse.GeoObjects)
 				
 				for shapeType, geoObject := range combinedResponse.GeoObjects {
-					// Parse the features from each shape type
-					var featureArray []interface{}
-					if err := json.Unmarshal(geoObject.Features, &featureArray); err == nil {
-						// Add shape type to properties for identification if needed
-						for i := range featureArray {
-							if feature, ok := featureArray[i].(map[string]interface{}); ok {
-								if props, ok := feature["properties"].(map[string]interface{}); ok {
-									props["shapeType"] = shapeType
-								} else {
-									feature["properties"] = map[string]interface{}{
-										"shapeType": shapeType,
-									}
-								}
-							}
-						}
-						
-						allFeatures = append(allFeatures, featureArray...)
+					// First, ensure we can unmarshal the Features property
+					var features []json.RawMessage
+					if err := json.Unmarshal(geoObject.Features, &features); err != nil {
+						app.errorLog.Printf("Error unmarshaling features for %s: %v", shapeType, err)
+						continue
+					}
+					
+					// Add each feature to our collection
+					for _, feature := range features {
+						allFeatures = append(allFeatures, feature)
 					}
 				}
 				
@@ -282,9 +277,9 @@ func (app *application) processPrompt(prompt string) FinalResponse {
 				}
 				
 				// Marshal to JSON for the frontend
-				geoJSON, err := json.Marshal(unifiedGeoJSON)
+				geoJSONBytes, err := json.Marshal(unifiedGeoJSON)
 				if err == nil {
-					response.GeoJSON = geoJSON
+					response.GeoJSON = geoJSONBytes
 				} else {
 					app.errorLog.Printf("Error marshaling unified GeoJSON: %v", err)
 				}
@@ -343,7 +338,3 @@ func (app *application) processPrompt(prompt string) FinalResponse {
 	return FinalResponse{Status: prompt}
 }
 
-// Helper function to send JSON through websocket
-func sendWSJSON(ws *websocket.Conn, data interface{}) error {
-	return ws.WriteJSON(data)
-}
