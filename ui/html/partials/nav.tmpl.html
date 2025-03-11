@@ -5,14 +5,16 @@
       {{template "drawerButton"}}
       {{template "logo" .}}
     </div>
+    {{if .IsAuthenticated}}
     <div class="flex-none">
-      <!-- Navigation Links -->
+      <!-- Navigation Links - Only shown to authenticated users -->
       <ul class="menu menu-horizontal px-3">
         <li><a href="/" class="px-3 py-2">Chat</a></li>
         <li><a href="/map" class="px-3 py-2">Map</a></li>
         <li><a href="/panel" class="px-3 py-2">Panel</a></li>
       </ul>
     </div>
+    {{end}}
     <div class="navbar-end mx-auto flex items-center gap-4">
       <!-- Theme Toggle -->
       <div class="flex items-center gap-2">
@@ -21,9 +23,9 @@
       </div>
       <div class="flex gap-2">
         {{if .IsAuthenticated}}
-          <form action='/user/logout' method='POST' class="btn btn-secondary">
+          <form action='/user/logout' method='POST'>
             <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
-            <button>Logout</button>
+            <button class="btn btn-secondary">Logout</button>
           </form>
         {{else}}
           <a href='/user/login' class="btn btn-secondary ml-2">Login</a>

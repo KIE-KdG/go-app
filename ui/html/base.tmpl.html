@@ -21,6 +21,8 @@
 </head>
 
 <body class="min-h-screen">
+  <!-- Only show drawer to authenticated users -->
+  {{if .IsAuthenticated}}
   <div class="drawer">
     <input id="my-drawer" type="checkbox" class="drawer-toggle" />
     <div class="drawer-content">
@@ -91,6 +93,33 @@
       </ul>
     </div>
   </div>
+  {{else}}
+  <!-- For unauthenticated users, just render the main content without drawer or nav -->
+  <main>
+    {{template "main" .}}
+  </main>
+  {{end}}
+
+  <script>
+    // Function to update theme and save the choice in localStorage
+    function toggleTheme(element) {
+      if (element.checked) {
+        document.documentElement.setAttribute('data-theme', element.value);
+        localStorage.setItem('theme', element.value);
+      } else {
+        document.documentElement.setAttribute('data-theme', 'waaterweg');
+        localStorage.setItem('theme', 'waaterweg');
+      }
+    }
+    // Set the toggle state based on the saved theme when the page loads
+    document.addEventListener('DOMContentLoaded', function () {
+      const savedTheme = localStorage.getItem('theme') || 'waaterweg';
+      if (savedTheme === 'waaterweg-dark') {
+        document.getElementById('theme-toggle').checked = true;
+      }
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    });
+  </script>
 </body>
 
 </html>

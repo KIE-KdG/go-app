@@ -1,0 +1,73 @@
+{{define "base"}}
+<!DOCTYPE html>
+<html lang="en" data-theme="waaterweg">
+
+<head>
+  <meta charset="UTF-8">
+  <title>{{template "title" .}} - LLM Chat</title>
+  <link rel="shortcut icon" href="/static/img/favicon.ico" type="image/x-icon">
+  <link href="/static/css/output.css" rel="stylesheet">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/theme-change@2.0.2/index.js"></script>
+
+  <!-- Apply saved theme from localStorage on page load -->
+  <script>
+    (function () {
+      const savedTheme = localStorage.getItem('theme') || 'waaterweg';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    })();
+  </script>
+  {{block "head" .}}{{end}}
+</head>
+
+<body class="min-h-screen">
+  <!-- Simplified Auth Navigation -->
+  <nav>
+    <div class="navbar bg-base-100 px-4">
+      <div class="navbar-start gap-2">
+        <!-- Logo Only -->
+        {{template "logo" .}}
+      </div>
+      <div class="navbar-end mx-auto flex items-center gap-4">
+        <!-- Theme Toggle -->
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="theme-toggle" value="waaterweg-dark" class="toggle theme-controller"
+            onchange="toggleTheme(this)">
+        </div>
+        <!-- Auth Links -->
+        <div class="flex gap-2">
+          <a href='/user/login' class="btn btn-secondary ml-2">Login</a>
+          <a href='/user/signup' class="btn btn-secondary">Signup</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container mx-auto mt-16">
+    {{template "main" .}}
+  </main>
+
+  <script>
+    // Function to update theme and save the choice in localStorage
+    function toggleTheme(element) {
+      if (element.checked) {
+        document.documentElement.setAttribute('data-theme', element.value);
+        localStorage.setItem('theme', element.value);
+      } else {
+        document.documentElement.setAttribute('data-theme', 'waaterweg');
+        localStorage.setItem('theme', 'waaterweg');
+      }
+    }
+    // Set the toggle state based on the saved theme when the page loads
+    document.addEventListener('DOMContentLoaded', function () {
+      const savedTheme = localStorage.getItem('theme') || 'waaterweg';
+      if (savedTheme === 'waaterweg-dark') {
+        document.getElementById('theme-toggle').checked = true;
+      }
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    });
+  </script>
+</body>
+
+</html>
+{{end}}

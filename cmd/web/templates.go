@@ -34,6 +34,12 @@ var functions = template.FuncMap{
 	"humanDate": humanDate,
 }
 
+// List of templates that should use the auth_base.tmpl.html instead of base.tmpl.html
+var authTemplates = map[string]bool{
+	"login.tmpl.html":  true,
+	"signup.tmpl.html": true,
+}
+
 func newTemplateCache() (map[string]*template.Template, error) {
 	cache := map[string]*template.Template{}
 
@@ -44,17 +50,29 @@ func newTemplateCache() (map[string]*template.Template, error) {
 
 	for _, page := range pages {
 		name := filepath.Base(page)
-
-		ts, err := template.New(name).Funcs(functions).ParseFiles("./ui/html/base.tmpl.html")
+		
+		// Determine which base template to use
+		var ts *template.Template
+		
+		if authTemplates[name] {
+			// For authentication pages, use auth_base.tmpl.html
+			ts, err = template.New(name).Funcs(functions).ParseFiles("./ui/html/auth_base.tmpl.html")
+		} else {
+			// For regular pages, use the standard base.tmpl.html
+			ts, err = template.New(name).Funcs(functions).ParseFiles("./ui/html/base.tmpl.html")
+		}
+		
 		if err != nil {
 			return nil, err
 		}
 
+		// Parse partials (shared by both base templates)
 		ts, err = ts.ParseGlob("./ui/html/partials/*.tmpl.html")
 		if err != nil {
 			return nil, err
 		}
 
+		// Parse the page template
 		ts, err = ts.ParseFiles(page)
 		if err != nil {
 			return nil, err
