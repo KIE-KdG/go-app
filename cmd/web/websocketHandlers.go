@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -16,15 +17,17 @@ type LLMStreamResponse struct {
 }
 
 type FinalResponse struct {
-	Status  string          `json:"status,omitempty"`
-	Answer  string          `json:"answer,omitempty"`
-	GeoJSON json.RawMessage `json:"geoJSON,omitempty"` // New field for GeoJSON data
+	Status     string          `json:"status,omitempty"`
+	Answer     string          `json:"answer,omitempty"`
+	GeoJSON    json.RawMessage `json:"geoJSON,omitempty"` // Field for GeoJSON data
+	Interrupted bool           `json:"interrupted,omitempty"` // New field to indicate interruption
 }
 
 type WebSocketRequest struct {
-	Message  string `json:"message"`
-	DBUsed   bool   `json:"dbUsed"`
-	DocsUsed bool   `json:"docsUsed"`
+	Message   string `json:"message"`
+	DBUsed    bool   `json:"dbUsed"`
+	DocsUsed  bool   `json:"docsUsed"`
+	Interrupt bool   `json:"interrupt"` // New field to signal interruption
 }
 
 func (app *application) handleConnections(w http.ResponseWriter, r *http.Request) {
@@ -46,50 +49,131 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 	}
 	defer ws.Close()
 
-	for {
-		_, msg, err := ws.ReadMessage()
-		if err != nil {
-			app.errorLog.Println("read error:", err)
-			break
-		}
+	// Interrupt channel to signal when to stop processing
+	interrupt := make(chan struct{})
+	// Mutex to protect the interrupt channel from concurrent access
+	var interruptMutex sync.Mutex
+	// Flag to track if we're currently processing a prompt
+	var isProcessing bool = false
 
-		req, err := parseWSRequest(msg)
-		if err != nil {
-			app.errorLog.Println("parse error:", err)
-			continue
-		}
-		app.infoLog.Printf("Received message: %s, DB: %t, Docs: %t", req.Message, req.DBUsed, req.DocsUsed)
-
-		chatUUID, err := uuid.Parse(chatID)
-		if err != nil {
-			app.errorLog.Printf("Could not pasrse into UUID: %s", chatID)
-			return
-		}
-
-		promptResponse, err := app.chatPort.ForwardMessageWithStream(req.Message, req.DBUsed, req.DocsUsed)
-		if err != nil {
-			app.serverError(w, err)
-			return
-		}
-
-		
-
-		for prompt := range promptResponse {
-			app.infoLog.Print(prompt)
-			finalResp := app.processPrompt(prompt)
-			
-			if finalResp.Answer != "" {
-				app.messages.Insert(chatUUID, "You", req.Message)
-				app.messages.Insert(chatUUID, "AI", finalResp.Answer)
-				app.chats.UpdateLastActivity(chatUUID)
-			}
-
-			if err := sendJSON(ws, finalResp); err != nil {
-				app.errorLog.Println("write error:", err)
+	// Start a goroutine to handle interrupt messages from client
+	go func() {
+		for {
+			_, msg, err := ws.ReadMessage()
+			if err != nil {
+				app.errorLog.Println("read error:", err)
 				break
 			}
+
+			req, err := parseWSRequest(msg)
+			if err != nil {
+				app.errorLog.Println("parse error:", err)
+				continue
+			}
+
+			// Handle interrupt signal
+			if req.Interrupt {
+				app.infoLog.Println("Received interrupt signal")
+				interruptMutex.Lock()
+				if isProcessing {
+					// Send interrupt signal by closing the channel
+					close(interrupt)
+					// Send acknowledgment back to client
+					if err := sendJSON(ws, FinalResponse{Interrupted: true}); err != nil {
+						app.errorLog.Println("error sending interrupt acknowledgment:", err)
+					}
+				}
+				interruptMutex.Unlock()
+				continue // Skip the rest of the loop for interrupts
+			}
+
+			// Regular message handling
+			app.infoLog.Printf("Received message: %s, DB: %t, Docs: %t", req.Message, req.DBUsed, req.DocsUsed)
+
+			chatUUID, err := uuid.Parse(chatID)
+			if err != nil {
+				app.errorLog.Printf("Could not parse into UUID: %s", chatID)
+				continue
+			}
+
+			// Create a new interrupt channel for this request
+			interruptMutex.Lock()
+			interrupt = make(chan struct{})
+			isProcessing = true
+			interruptMutex.Unlock()
+
+			// Process the prompt in a separate goroutine
+			go func() {
+				defer func() {
+					interruptMutex.Lock()
+					isProcessing = false
+					interruptMutex.Unlock()
+				}()
+
+				promptResponse, err := app.chatPort.ForwardMessageWithStream(req.Message, req.DBUsed, req.DocsUsed)
+				if err != nil {
+					app.errorLog.Printf("Error forwarding message: %v", err)
+					if err := sendJSON(ws, FinalResponse{Status: "Error: " + err.Error()}); err != nil {
+						app.errorLog.Println("write error:", err)
+					}
+					return
+				}
+
+				// Variable to store the final answer for insertion into the database
+				var finalAnswer string
+
+				// Process incoming prompt responses
+				processLoop:
+				for {
+					select {
+					case prompt, ok := <-promptResponse:
+						if !ok {
+							// Channel closed, no more messages
+							break processLoop
+						}
+
+						app.infoLog.Print(prompt)
+						finalResp := app.processPrompt(prompt)
+						
+						// Store the final answer if present
+						if finalResp.Answer != "" {
+							finalAnswer = finalResp.Answer
+						}
+
+						if err := sendJSON(ws, finalResp); err != nil {
+							app.errorLog.Println("write error:", err)
+							break processLoop
+						}
+					case <-interrupt:
+						// Handle interruption
+						app.infoLog.Println("Processing interrupted")
+						
+						// Send one final message indicating interruption
+						finalResp := FinalResponse{
+							Status: "Generation interrupted by user.",
+							Answer: finalAnswer, // Include any partial answer we have
+						}
+						
+						if err := sendJSON(ws, finalResp); err != nil {
+							app.errorLog.Println("write error:", err)
+						}
+						
+						break processLoop
+					}
+				}
+
+				// Only save to database if we have a complete answer
+				if finalAnswer != "" {
+					app.messages.Insert(chatUUID, "You", req.Message)
+					app.messages.Insert(chatUUID, "AI", finalAnswer)
+					app.chats.UpdateLastActivity(chatUUID)
+				}
+			}()
 		}
-	}
+	}()
+
+	// Keep the connection open
+	<-r.Context().Done()
 }
 
 // parseWSRequest unmarshals the JSON message into a WebSocketRequest.
@@ -108,7 +192,7 @@ func sendJSON(ws *websocket.Conn, data interface{}) error {
 	return ws.WriteMessage(websocket.TextMessage, jsonRes)
 }
 
-// Update the processPrompt function to only include GeoJSON in final responses
+// Process the prompt and return a FinalResponse
 func (app *application) processPrompt(prompt string) FinalResponse {
 	var streamResp LLMStreamResponse
 	var response FinalResponse

@@ -41,7 +41,9 @@ func (c *ChatPort) ForwardMessage(message string) (string, error) {
 	return string(msg), nil
 }
 
-
+// ForwardMessageWithStream sends a message to the connected websocket server
+// and returns a channel that streams the responses back.
+// The channel will be closed when the response is complete or if there's an error.
 func (c *ChatPort) ForwardMessageWithStream(message string, dbUsed, docsUsed bool) (<-chan string, error) {
 	otherServer := "ws://localhost" + c.Port + "/ws/documents/search"
 	conn, _, err := websocket.DefaultDialer.Dial(otherServer, nil)
@@ -51,8 +53,8 @@ func (c *ChatPort) ForwardMessageWithStream(message string, dbUsed, docsUsed boo
 
 	req := WebSocketRequest{
 		Message:  message,
-    DBUsed:   dbUsed,
-    DocsUsed: docsUsed,
+		DBUsed:   dbUsed,
+		DocsUsed: docsUsed,
 	}
 
 	jsonMsg, err := json.Marshal(req)
