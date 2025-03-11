@@ -16,8 +16,9 @@ type LLMStreamResponse struct {
 }
 
 type FinalResponse struct {
-	Status string `json:"status,omitempty"`
-	Answer string `json:"answer,omitempty"`
+	Status  string          `json:"status,omitempty"`
+	Answer  string          `json:"answer,omitempty"`
+	GeoJSON json.RawMessage `json:"geoJSON,omitempty"` // New field for GeoJSON data
 }
 
 type WebSocketRequest struct {
@@ -98,28 +99,6 @@ func parseWSRequest(msg []byte) (WebSocketRequest, error) {
 	return req, err
 }
 
-// processPrompt converts the raw prompt string into a FinalResponse.
-func (app *application) processPrompt(prompt string) FinalResponse {
-	var streamResp LLMStreamResponse
-	if err := json.Unmarshal([]byte(prompt), &streamResp); err != nil {
-		app.errorLog.Println("error unmarshaling LLM response:", err)
-		// Fallback: return the raw prompt as a status.
-		return FinalResponse{Status: prompt}
-	}
-
-	if streamResp.Status != "" {
-		return FinalResponse{Status: streamResp.Status}
-	} else if streamResp.Result != "" && streamResp.Details != "" {
-		var detailsMap map[string]interface{}
-		if err := json.Unmarshal([]byte(streamResp.Details), &detailsMap); err == nil {
-			if answer, ok := detailsMap["answer"].(string); ok {
-				return FinalResponse{Answer: answer}
-			}
-		}
-	}
-	return FinalResponse{}
-}
-
 // sendJSON marshals the given data and sends it as a TextMessage.
 func sendJSON(ws *websocket.Conn, data interface{}) error {
 	jsonRes, err := json.Marshal(data)
@@ -127,4 +106,71 @@ func sendJSON(ws *websocket.Conn, data interface{}) error {
 		return err
 	}
 	return ws.WriteMessage(websocket.TextMessage, jsonRes)
+}
+
+// Update the processPrompt function to only include GeoJSON in final responses
+func (app *application) processPrompt(prompt string) FinalResponse {
+	var streamResp LLMStreamResponse
+	var response FinalResponse
+
+	if err := json.Unmarshal([]byte(prompt), &streamResp); err != nil {
+			app.errorLog.Println("error unmarshaling LLM response:", err)
+			// Fallback: return the raw prompt as a status.
+			response = FinalResponse{Status: prompt}
+	} else if streamResp.Status != "" {
+			// For status updates, don't include GeoJSON
+			response = FinalResponse{Status: streamResp.Status}
+	} else if streamResp.Result != "" && streamResp.Details != "" {
+			// For final answers, include both answer and GeoJSON
+			var detailsMap map[string]interface{}
+			if err := json.Unmarshal([]byte(streamResp.Details), &detailsMap); err == nil {
+					if answer, ok := detailsMap["answer"].(string); ok {
+							response = FinalResponse{Answer: answer}
+							
+							// Include the dummy GeoJSON only with the final answer
+							dummyGeoJSON, err := app.getDummyGeoJSON()
+							if err == nil {
+									response.GeoJSON = dummyGeoJSON
+							} else {
+									app.errorLog.Printf("Failed to load dummy GeoJSON: %v", err)
+							}
+					}
+			}
+	}
+	
+	return response
+}
+
+func (app *application) getDummyGeoJSON() (json.RawMessage, error) {
+	// Static GeoJSON example that should definitely work
+	staticGeoJSON := `{
+			"type": "FeatureCollection",
+			"features": [
+					{
+							"type": "Feature",
+							"properties": {
+									"name": "Test Location"
+							},
+							"geometry": {
+									"type": "Point",
+									"coordinates": [4.9041, 52.3676]
+							}
+					},
+					{
+							"type": "Feature",
+							"properties": {
+									"name": "Test Line"
+							},
+							"geometry": {
+									"type": "LineString",
+									"coordinates": [
+											[4.9041, 52.3676],
+											[4.8500, 52.3500]
+									]
+							}
+					}
+			]
+	}`
+
+	return []byte(staticGeoJSON), nil
 }

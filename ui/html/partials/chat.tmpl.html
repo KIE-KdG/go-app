@@ -1,17 +1,11 @@
 {{define "chat"}}
-<div class="min-h-screen max-w-3xl mx-auto flex flex-col">
-  <div x-data="chatApp()" x-init="init()" class="flex flex-col flex-1">
-    <!-- Scroll to bottom button -->
-    <button @click="scrollToBottom()" x-show="showScrollButton"
-      class="fixed bottom-24 right-4 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 shadow-lg z-20"
-      aria-label="Scroll to bottom">
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="bevel">
-        <path d="M12 5v14M5 12l7 7 7-7" />
-      </svg>
-    </button>
-
-    <!-- Dynamic Chat messages container -->
+<div class="min-h-screen flex flex-col relative" 
+  x-data="chatApp()" 
+  x-init="init()" 
+  :class="{'max-w-3xl mx-auto': !hasMap || !mapVisible, 'max-w-6xl mx-auto grid grid-cols-3': hasMap && mapVisible}">
+  
+  <!-- Chat messages container -->
+  <div class="flex flex-col flex-1" :class="{'col-span-2': hasMap && mapVisible}">
     <div id="chatMessages" class="flex-1 flex flex-col gap-3 px-4 pt-1 overflow-auto" @scroll="checkScroll()">
       {{range .Messages}}
       {{/* Compute background class based on sender type */}}
@@ -61,6 +55,13 @@
               <!-- Actual response with markdown support -->
               <div x-show="message.answer" class="markdown-content text-black dark:text-white"
                 x-html="formatMarkdown(message.answer)"></div>
+              
+              <!-- Inline map display (only for mobile or when side map is hidden) -->
+              <div x-show="message.geoJSON && (!mapVisible || window.innerWidth < 768)" class="mt-4">
+                <div class="text-sm font-bold mb-2">Map Data:</div>
+                <div :id="'mobile-map-' + index" class="h-64 w-full rounded-lg shadow-md"></div>
+                <div x-init="$nextTick(() => { if (message.geoJSON) initMap('mobile-map-' + index, message.geoJSON); })"></div>
+              </div>
             </div>
           </template>
 
@@ -72,7 +73,7 @@
       </template>
     </div>
 
-    <!-- Chat Input Form with brighter background -->
+    <!-- Chat Input Form -->
     <div class="card bg-base-100 w-full shadow-xl sticky bottom-0 z-10">
       <div class="p-6 relative">
         <form @submit.prevent="sendMessage" class="relative w-full">
@@ -106,6 +107,20 @@
               <input type="checkbox" x-model="docsUsed" class="hidden" :disabled="isProcessing">
               Docs
             </label>
+            
+            <!-- Toggle map button (only visible when map exists) -->
+            <label x-show="hasMap" class="flex min-w-8 h-9 ml-2"
+              :class="{'btn': true, 'btn-primary': mapVisible, 'btn-outline': !mapVisible, 'rounded-full': true}">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="bevel">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+              <input type="checkbox" x-model="mapVisible" class="hidden">
+              Map
+            </label>
+            
             <button type="submit" id="sendButton" :disabled="isProcessing || !inputMessage.trim()"
               class="absolute right-2 bottom-2 p-2 rounded-full transition-colors duration-200"
               :class="isProcessing ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-blue-600 hover:bg-blue-700'"
@@ -128,10 +143,29 @@
       </div>
     </div>
   </div>
+  
+  <!-- Scroll to bottom button -->
+  <button @click="scrollToBottom()" x-show="showScrollButton"
+    class="fixed bottom-24 right-4 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 shadow-lg z-20"
+    aria-label="Scroll to bottom">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="bevel">
+      <path d="M12 5v14M5 12l7 7 7-7" />
+    </svg>
+  </button>
+
+  <!-- Map panel (col-span-1 when visible) -->
+  <div x-show="hasMap && mapVisible" class="col-span-1 relative hidden md:block">
+    <div class="sticky top-0 h-screen p-4">
+      <div class="h-full flex flex-col">
+        <h3 class="text-lg font-bold mb-2">Map Visualization</h3>
+        <div id="side-map-container" class="flex-1 rounded-lg shadow-md overflow-hidden"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
-  // Script section remains unchanged
   // Load marked.js for Markdown rendering
   if (!window.marked) {
     const script = document.createElement('script');
@@ -154,13 +188,201 @@
       reconnectTimeout: null,
       showScrollButton: false,
       responseStartTime: null,
-
+      hasMap: false, // Track if we have a map to show
+      mapVisible: true, // Whether the side map is visible (can be toggled)
+      
       init() {
         this.connectWebSocket();
         this.$nextTick(() => {
           this.scrollToBottom();
           this.autoResizeTextarea();
         });
+        
+        // Add resize event to handle the map resizing
+        window.addEventListener('resize', () => {
+          if (this.hasMap && this.mapVisible) {
+            this.refreshMap();
+          }
+        });
+      },
+      
+      // Refreshes the side map if needed
+      refreshMap() {
+        if (this.hasMap && this.mapVisible) {
+          // Force Leaflet to recalculate map size
+          setTimeout(() => {
+            const container = document.getElementById('side-map-container');
+            if (container && container._leaflet_id) {
+              const map = L.DomUtil.get('side-map-container')._leaflet;
+              if (map) {
+                map.invalidateSize();
+              }
+            }
+          }, 300);
+        }
+      },
+
+      // Initialize map with GeoJSON data
+      initMap(mapId, geoJSONData) {
+        console.log("Initializing map:", mapId);
+        
+        // Use setTimeout to ensure the DOM is fully ready
+        setTimeout(() => {
+          const mapContainer = document.getElementById(mapId);
+          
+          if (!mapContainer) {
+            console.error("Map container not found:", mapId);
+            return;
+          }
+          
+          try {
+            // If map already initialized, don't re-initialize
+            if (mapContainer._leaflet_id) {
+              console.log("Map already initialized:", mapId);
+              return;
+            }
+            
+            // Initialize the map
+            const map = L.map(mapId, {
+              center: [0, 0],
+              zoom: 2
+            });
+            
+            // Add OpenStreetMap tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+            
+            // Parse and add the GeoJSON data if it exists
+            if (geoJSONData && typeof geoJSONData !== 'undefined') {
+              // Convert string to object if needed
+              const geoJSON = (typeof geoJSONData === 'string') ? 
+                JSON.parse(geoJSONData) : geoJSONData;
+
+              console.log("GeoJSON data:", geoJSON);
+              
+              if (geoJSON) {
+                try {
+                  // Create a GeoJSON layer
+                  const geoLayer = L.geoJSON(geoJSON).addTo(map);
+                  
+                  // Try to fit bounds if possible
+                  if (geoLayer && geoLayer.getBounds && typeof geoLayer.getBounds === 'function') {
+                    const bounds = geoLayer.getBounds();
+                    if (bounds && !bounds.isEmpty && !bounds.isEmpty()) {
+                      map.fitBounds(bounds, { padding: [30, 30] });
+                    }
+                  }
+                } catch (e) {
+                  console.error("Error adding GeoJSON layer:", e);
+                }
+              } else {
+                console.error("Invalid GeoJSON data");
+              }
+            } else {
+              console.warn("No GeoJSON data provided");
+              
+              // Add a marker at the center as fallback
+              L.marker([0, 0]).addTo(map)
+                .bindPopup("No GeoJSON data available")
+                .openPopup();
+            }
+            
+            // Force map to redraw
+            setTimeout(() => {
+              map.invalidateSize();
+              console.log("Map size refreshed");
+            }, 100);
+            
+            console.log("Map initialization complete for:", mapId);
+            
+            // Also initialize side map if this is the first GeoJSON we've received
+            if (this.hasMap && mapId.includes('mobile-map') && !document.getElementById('side-map-container')._leaflet_id) {
+              this.initSideMap(geoJSONData);
+            }
+          } catch (e) {
+            console.error('Error initializing map:', e);
+          }
+        }, 100); // Short delay to ensure DOM is ready
+      },
+      
+      // Initialize the side map (for desktop view)
+      initSideMap(geoJSONData) {
+        console.log("Initializing side map");
+        
+        // Use setTimeout to ensure the DOM is fully ready
+        setTimeout(() => {
+          const sideMapContainer = document.getElementById('side-map-container');
+          
+          if (!sideMapContainer) {
+            console.error("Side map container not found");
+            return;
+          }
+          
+          try {
+            // Check if map already exists
+            if (sideMapContainer._leaflet_id) {
+              console.log("Side map already initialized");
+              return;
+            }
+            
+            // Initialize the map
+            const sideMap = L.map('side-map-container', {
+              center: [0, 0],
+              zoom: 2
+            });
+            
+            // Add OpenStreetMap tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(sideMap);
+            
+            // Parse and add the GeoJSON data if it exists
+            if (geoJSONData && typeof geoJSONData !== 'undefined') {
+              // Convert string to object if needed
+              const geoJSON = (typeof geoJSONData === 'string') ? 
+                JSON.parse(geoJSONData) : geoJSONData;
+              
+              console.log("GeoJSON data for side map:", geoJSON);
+              
+              if (geoJSON) {
+                try {
+                  // Create a GeoJSON layer
+                  const geoLayer = L.geoJSON(geoJSON).addTo(sideMap);
+                  
+                  // Try to fit bounds if possible
+                  if (geoLayer && geoLayer.getBounds && typeof geoLayer.getBounds === 'function') {
+                    const bounds = geoLayer.getBounds();
+                    if (bounds && !bounds.isEmpty && !bounds.isEmpty()) {
+                      sideMap.fitBounds(bounds, { padding: [30, 30] });
+                    }
+                  }
+                } catch (e) {
+                  console.error("Error adding GeoJSON layer to side map:", e);
+                }
+              } else {
+                console.error("Invalid GeoJSON data for side map");
+              }
+            } else {
+              console.warn("No GeoJSON data provided for side map");
+              
+              // Add a marker at the center as fallback
+              L.marker([0, 0]).addTo(sideMap)
+                .bindPopup("No GeoJSON data available")
+                .openPopup();
+            }
+            
+            // Force map to redraw
+            setTimeout(() => {
+              sideMap.invalidateSize();
+              console.log("Side map size refreshed");
+            }, 100);
+            
+            console.log("Side map initialization complete");
+          } catch (e) {
+            console.error('Error initializing side map:', e);
+          }
+        }, 300); // Longer delay for side map to ensure container is visible
       },
 
       connectWebSocket() {
@@ -181,33 +403,50 @@
             return;
           }
 
-          if (data.status) {
-            if (this.currentResponse) {
-              this.currentResponse.statusUpdates.push(data.status.trim());
-            }
+          // Create response object if it doesn't exist yet
+          if (!this.currentResponse) {
+            this.messages.push({
+              sender: 'AI',
+              statusUpdates: [],
+              answer: '',
+              geoJSON: null
+            });
+            this.currentResponse = this.messages[this.messages.length - 1];
           }
 
+          // Handle status updates
+          if (data.status) {
+            this.currentResponse.statusUpdates.push(data.status.trim());
+          }
+
+          // Handle answer data
           if (data.answer) {
-            if (!this.currentResponse) {
-              this.messages.push({
-                sender: 'AI',
-                statusUpdates: [],
-                answer: ''
-              });
-              this.currentResponse = this.messages[this.messages.length - 1];
-            }
-
             this.currentResponse.answer = data.answer;
+          }
 
-            // Calculate response time if we have a start time
+          // Handle GeoJSON data
+          if (data.geoJSON) {
+            console.log("Received GeoJSON data");
+            this.currentResponse.geoJSON = data.geoJSON;
+            this.hasMap = true; // Set hasMap to true when we get GeoJSON data
+            
+            // Refresh layout to accommodate map
+            this.$nextTick(() => {
+              this.refreshMap();
+            });
+          }
+
+          // Finalize the response if we have answer or GeoJSON
+          if (data.answer || data.geoJSON) {
+            // Calculate response time
             if (this.responseStartTime) {
               const responseTime = new Date() - this.responseStartTime;
               this.currentResponse.responseTime = this.formatResponseTime(responseTime);
               this.responseStartTime = null;
             }
-
+            
             this.currentResponse = null;
-            this.isProcessing = false; // Enable input form when response is complete
+            this.isProcessing = false;
           }
 
           this.$nextTick(() => {
@@ -278,7 +517,8 @@
         this.messages.push({
           sender: 'AI',
           statusUpdates: [],
-          answer: ''
+          answer: '',
+          geoJSON: null
         });
 
         this.currentResponse = this.messages[this.messages.length - 1];
@@ -351,9 +591,20 @@
     }
   }
 </script>
-
 <style>
-  /* Markdown content styling remains unchanged */
+  /* Ensure Leaflet is styled properly */
+  #side-map-container {
+    min-height: 300px;
+    height: calc(100vh - 120px);
+    width: 100%;
+    z-index: 1;
+  }
+  
+  [class*="mobile-map-"] {
+    min-height: 250px;
+  }
+  
+  /* Markdown content styling */
   .markdown-content h1 {
     font-size: 1.8em;
     font-weight: bold;
