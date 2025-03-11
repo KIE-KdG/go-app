@@ -1,0 +1,107 @@
+{{define "enhanced_map_panel"}}
+<div class="flex flex-col h-full">
+  <!-- Map header with controls -->
+  <div class="bg-base-200 p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+    <div class="flex items-center">
+      <h3 class="text-lg font-bold">Map Visualization</h3>
+      <div class="ml-2">
+        <span x-text="currentMapIndex + 1"></span>/<span x-text="mapCollection.length"></span>
+      </div>
+    </div>
+    <div class="flex space-x-2">
+      <!-- Map navigation buttons -->
+      <button @click="previousMap()" 
+              :disabled="currentMapIndex <= 0"
+              :class="{'opacity-50 cursor-not-allowed': currentMapIndex <= 0}"
+              class="p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-600">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </button>
+      <button @click="nextMap()" 
+              :disabled="currentMapIndex >= mapCollection.length - 1"
+              :class="{'opacity-50 cursor-not-allowed': currentMapIndex >= mapCollection.length - 1}"
+              class="p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-600">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18l6-6-6-6"/>
+        </svg>
+      </button>
+      
+      <!-- Close button -->
+      <button @click="mapVisible = false" class="p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-600">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </div>
+  
+  <!-- Map meta information -->
+  <div class="bg-base-100 p-4 border-b border-gray-200 dark:border-gray-700">
+    <div x-show="currentMap && currentMap.messageText" class="mb-2">
+      <p class="text-sm text-gray-600 dark:text-gray-400 italic">
+        "<span x-text="currentMap.messageText"></span>"
+      </p>
+    </div>
+    
+    <!-- Map tiles selector -->
+    <div class="flex items-center space-x-2 mb-2">
+      <label for="map-style" class="text-sm font-medium">Map Style:</label>
+      <select id="map-style" @change="changeMapStyle($event.target.value)" 
+              class="select select-sm select-bordered rounded">
+        <option value="osm">OpenStreetMap</option>
+        <option value="satellite">Satellite</option>
+        <option value="topo">Topographic</option>
+      </select>
+    </div>
+    
+    <!-- Map information -->
+    <div class="text-xs text-gray-600 dark:text-gray-400">
+      <span x-show="currentMap && currentMap.featureCount">
+        Features: <span x-text="currentMap.featureCount"></span>
+      </span>
+      <span x-show="currentMap && currentMap.timestamp" class="ml-2">
+        Created: <span x-text="formatTimestamp(currentMap.timestamp)"></span>
+      </span>
+    </div>
+  </div>
+  
+  <!-- Thumbnails of available maps -->
+  <div class="bg-base-100 p-2 border-b border-gray-200 dark:border-gray-700 flex overflow-x-auto">
+    <template x-for="(map, index) in mapCollection" :key="map.id">
+      <div @click="selectMap(index)" 
+           :class="{'border-blue-500 ring-2 ring-blue-500': currentMapIndex === index, 
+                   'border-gray-300 dark:border-gray-600': currentMapIndex !== index}"
+           class="flex-shrink-0 w-16 h-16 border rounded m-1 cursor-pointer overflow-hidden">
+        <div :id="'map-thumb-' + index" class="w-full h-full"></div>
+        <div x-init="initThumbnailMap('map-thumb-' + index, map.geoJSON)"></div>
+      </div>
+    </template>
+  </div>
+  
+  <!-- Main map display -->
+  <div class="flex-1 relative">
+    <div id="main-map-container" class="absolute top-0 left-0 right-0 bottom-0"></div>
+    
+    <!-- Feature info panel (shown when feature is clicked) -->
+    <div x-show="selectedFeatureInfo" 
+         class="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-800 p-4 border-t border-gray-200 dark:border-gray-700 max-h-1/3 overflow-y-auto">
+      <div class="flex justify-between items-center mb-2">
+        <h4 class="font-bold">Feature Information</h4>
+        <button @click="selectedFeatureInfo = null" class="p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-600">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <pre x-text="JSON.stringify(selectedFeatureInfo, null, 2)" class="text-xs overflow-x-auto"></pre>
+    </div>
+  </div>
+</div>
+{{end}}

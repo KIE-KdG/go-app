@@ -1,13 +1,21 @@
 {{define "chat"}}
 <div class="min-h-screen flex flex-col relative" 
   x-data="chatApp()" 
-  x-init="init()" 
+  x-init="init()"
   :class="{'max-w-3xl mx-auto': !hasMap || !mapVisible, 'max-w-6xl mx-auto grid grid-cols-3': hasMap && mapVisible}">
   
-  <!-- Chat messages container -->
-  <div class="flex flex-col flex-1" :class="{'col-span-2': hasMap && mapVisible}">
+  <!-- Chat messages container (left/center) -->
+  <div class="flex flex-col flex-1"
+       :class="{'col-span-3': !hasMap || !mapVisible, 'col-span-2': hasMap && mapVisible}">
     {{template "chat_messages" .}}
     {{template "chat_input" .}}
+  </div>
+  
+  <!-- Map panel (right side) -->
+  <div x-show="hasMap && mapVisible" 
+       class="hidden md:block col-span-1 border-l border-gray-200 dark:border-gray-700 h-screen sticky top-0 overflow-y-auto"
+       :class="{'animate-slide-in': hasMap && mapVisible}">
+    {{template "enhanced_map_panel" .}}
   </div>
   
   <!-- Scroll to bottom button -->
@@ -19,8 +27,6 @@
       <path d="M12 5v14M5 12l7 7 7-7" />
     </svg>
   </button>
-
-  {{template "map_panel" .}}
 </div>
 
 {{template "scripts" .}}

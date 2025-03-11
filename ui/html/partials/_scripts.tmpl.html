@@ -22,8 +22,19 @@
       reconnectTimeout: null,
       showScrollButton: false,
       responseStartTime: null,
-      hasMap: false, // Track if we have a map to show
-      mapVisible: true, // Whether the side map is visible (can be toggled)
+      hasMap: false,
+      mapVisible: true,
+      mapCollection: [], // Array to store multiple maps
+      currentMapIndex: 0,
+      selectedFeatureInfo: null, // For displaying feature properties
+      basemaps: {}, // Will store map tile layers
+      mainMap: null, // Reference to the main map
+      
+      // Computed property to get the current map
+      get currentMap() {
+        return this.mapCollection.length > 0 ? 
+          this.mapCollection[this.currentMapIndex] : null;
+      },
       
       init() {
         this.connectWebSocket();
@@ -32,12 +43,336 @@
           this.autoResizeTextarea();
         });
         
+        // Initialize the main map (empty)
+        this.$nextTick(() => {
+          this.initMainMap();
+        });
+        
         // Add resize event to handle the map resizing
         window.addEventListener('resize', () => {
           if (this.hasMap && this.mapVisible) {
             this.refreshMap();
           }
         });
+      },
+      
+      // Initialize the main map container
+      initMainMap() {
+        if (!document.getElementById('main-map-container')) return;
+        
+        // Create main map if it doesn't exist
+        if (!this.mainMap) {
+          console.log("Initializing main map");
+          this.mainMap = L.map('main-map-container', {
+            center: [51.05, 3.7], // Default to Belgium
+            zoom: 10,
+            maxZoom: 18
+          });
+          
+          // Setup base maps
+          this.basemaps = {
+            osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }),
+            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+              attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            }),
+            topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+              attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://opentopomap.org">OpenTopoMap</a>'
+            })
+          };
+          
+          // Add default basemap
+          this.basemaps.osm.addTo(this.mainMap);
+        }
+        
+        // Force a size refresh
+        setTimeout(() => {
+          if (this.mainMap) {
+            this.mainMap.invalidateSize();
+          }
+        }, 300);
+      },
+      
+      // Add a new map to the collection
+      addMapToCollection(geoJSON, messageText = '') {
+        // Generate a unique ID for this map
+        const mapId = 'map-' + Date.now();
+        
+        // Count features in the GeoJSON
+        let featureCount = 0;
+        try {
+          if (geoJSON.features && Array.isArray(geoJSON.features)) {
+            featureCount = geoJSON.features.length;
+          } else if (geoJSON.type === 'Feature') {
+            featureCount = 1;
+          }
+        } catch (e) {
+          console.error("Error counting features:", e);
+        }
+        
+        // Add to collection
+        this.mapCollection.push({
+          id: mapId,
+          geoJSON: geoJSON,
+          timestamp: new Date(),
+          messageText: messageText,
+          featureCount: featureCount
+        });
+        
+        // Set as current map
+        this.currentMapIndex = this.mapCollection.length - 1;
+        
+        // Update the main map
+        this.$nextTick(() => {
+          this.updateMainMap();
+        });
+        
+        return mapId;
+      },
+      
+      // Select a map from the collection
+      selectMap(index) {
+        if (index >= 0 && index < this.mapCollection.length) {
+          this.currentMapIndex = index;
+          this.updateMainMap();
+        }
+      },
+      
+      // Navigate to the next map
+      nextMap() {
+        if (this.currentMapIndex < this.mapCollection.length - 1) {
+          this.currentMapIndex++;
+          this.updateMainMap();
+        }
+      },
+      
+      // Navigate to the previous map
+      previousMap() {
+        if (this.currentMapIndex > 0) {
+          this.currentMapIndex--;
+          this.updateMainMap();
+        }
+      },
+      
+      // Change the map style (basemap)
+      changeMapStyle(style) {
+        if (!this.mainMap) return;
+        
+        // Remove all base layers
+        Object.values(this.basemaps).forEach(layer => {
+          if (this.mainMap.hasLayer(layer)) {
+            this.mainMap.removeLayer(layer);
+          }
+        });
+        
+        // Add selected base layer
+        if (this.basemaps[style]) {
+          this.basemaps[style].addTo(this.mainMap);
+        }
+      },
+      
+      // Initialize a thumbnail map
+      initThumbnailMap(containerId, geoJSON) {
+        setTimeout(() => {
+          const container = document.getElementById(containerId);
+          if (!container) return;
+          
+          // Create mini map
+          try {
+            const thumbMap = L.map(containerId, {
+              zoomControl: false,
+              attributionControl: false,
+              dragging: false,
+              touchZoom: false,
+              scrollWheelZoom: false,
+              doubleClickZoom: false,
+              boxZoom: false,
+              tap: false
+            });
+            
+            // Add minimal OSM tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: ''
+            }).addTo(thumbMap);
+            
+            // Add GeoJSON with minimal styling
+            if (geoJSON) {
+              const geoLayer = L.geoJSON(geoJSON, {
+                style: {
+                  weight: 2,
+                  color: '#3388ff',
+                  opacity: 1,
+                  fillOpacity: 0.5
+                },
+                pointToLayer: (feature, latlng) => {
+                  return L.circleMarker(latlng, {
+                    radius: 4,
+                    fillColor: '#3388ff',
+                    color: '#000',
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                  });
+                }
+              }).addTo(thumbMap);
+              
+              // Try to fit to bounds
+              try {
+                if (geoLayer.getBounds && !geoLayer.getBounds().isEmpty()) {
+                  thumbMap.fitBounds(geoLayer.getBounds());
+                } else {
+                  thumbMap.setView([51.05, 3.7], 8);
+                }
+              } catch (e) {
+                thumbMap.setView([51.05, 3.7], 8);
+              }
+            } else {
+              thumbMap.setView([51.05, 3.7], 8);
+            }
+          } catch (e) {
+            console.error("Error creating thumbnail map:", e);
+          }
+        }, 300);
+      },
+      
+      // Update the main map with the current map's GeoJSON
+      updateMainMap() {
+        if (!this.mainMap || !this.currentMap) return;
+        
+        // Clear existing GeoJSON layers
+        this.mainMap.eachLayer(layer => {
+          if (layer instanceof L.GeoJSON) {
+            this.mainMap.removeLayer(layer);
+          }
+        });
+        
+        // Reset selected feature
+        this.selectedFeatureInfo = null;
+        
+        // Add the current map's GeoJSON
+        try {
+          // Create GeoJSON layer with styling and interactivity
+          const geoLayer = L.geoJSON(this.currentMap.geoJSON, {
+            style: (feature) => {
+              return {
+                weight: 2,
+                opacity: 1,
+                color: '#3388ff',
+                dashArray: '',
+                fillOpacity: 0.5,
+                fillColor: this.getColorForFeature(feature)
+              };
+            },
+            pointToLayer: (feature, latlng) => {
+              return L.circleMarker(latlng, {
+                radius: 8,
+                fillColor: this.getColorForFeature(feature),
+                color: '#000',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.8
+              });
+            },
+            onEachFeature: (feature, layer) => {
+              // Add popups and click handling
+              if (feature.properties) {
+                const popupContent = Object.entries(feature.properties)
+                  .map(([key, value]) => `<strong>${key}:</strong> ${value}`)
+                  .join('<br>');
+                
+                if (popupContent) {
+                  layer.bindPopup(popupContent);
+                }
+                
+                // Show feature info panel on click
+                layer.on('click', () => {
+                  this.selectedFeatureInfo = feature.properties;
+                });
+                
+                // Highlight on mouseover
+                layer.on('mouseover', (e) => {
+                  const layer = e.target;
+                  layer.setStyle({
+                    weight: 3,
+                    color: '#666',
+                    dashArray: '',
+                    fillOpacity: 0.7
+                  });
+                  if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                    layer.bringToFront();
+                  }
+                });
+                
+                // Reset on mouseout
+                layer.on('mouseout', (e) => {
+                  geoLayer.resetStyle(e.target);
+                });
+              }
+            }
+          }).addTo(this.mainMap);
+          
+          // Fit the map to the bounds of the GeoJSON
+          try {
+            if (geoLayer.getBounds && !geoLayer.getBounds().isEmpty()) {
+              this.mainMap.fitBounds(geoLayer.getBounds(), { padding: [30, 30] });
+            }
+          } catch (e) {
+            console.error("Error fitting to bounds:", e);
+            this.mainMap.setView([51.05, 3.7], 10);
+          }
+        } catch (e) {
+          console.error("Error updating main map:", e);
+        }
+      },
+      
+      // Get color for feature (can be customized based on properties)
+      getColorForFeature(feature) {
+        // This is a simple example - customize as needed
+        if (!feature.properties) return '#3388ff';
+        
+        // If it has a type or status property, use different colors
+        if (feature.properties.type) {
+          const type = feature.properties.type.toLowerCase();
+          if (type.includes('water') || type.includes('river') || type.includes('lake')) {
+            return '#0077be';
+          } else if (type.includes('forest') || type.includes('park') || type.includes('green')) {
+            return '#228B22';
+          } else if (type.includes('building') || type.includes('urban')) {
+            return '#CD5C5C';
+          }
+        }
+        
+        if (feature.properties.status) {
+          const status = feature.properties.status.toLowerCase();
+          if (status.includes('occupied')) {
+            return '#FF5733';
+          } else if (status.includes('available')) {
+            return '#33FF57';
+          } else if (status.includes('maintenance')) {
+            return '#FFFF33';
+          }
+        }
+        
+        if (feature.properties.shapeType) {
+          const shapeType = feature.properties.shapeType;
+          if (shapeType.includes('Point')) {
+            return '#FF5733';
+          } else if (shapeType.includes('Line')) {
+            return '#3366FF';
+          } else if (shapeType.includes('Polygon')) {
+            return '#33CC33';
+          }
+        }
+        
+        return '#3388ff'; // Default blue
+      },
+      
+      // Format map timestamp to readable string
+      formatTimestamp(timestamp) {
+        if (!timestamp) return '';
+        const date = new Date(timestamp);
+        return date.toLocaleString();
       },
       
       // Method to interrupt the generation
@@ -72,194 +407,25 @@
         }
       },
       
-      // Refreshes the side map if needed
+      // Refreshes the map if needed
       refreshMap() {
-        if (this.hasMap && this.mapVisible) {
+        if (this.hasMap && this.mapVisible && this.mainMap) {
           // Force Leaflet to recalculate map size
           setTimeout(() => {
-            const container = document.getElementById('side-map-container');
-            if (container && container._leaflet_id) {
-              const map = L.DomUtil.get('side-map-container')._leaflet;
-              if (map) {
-                map.invalidateSize();
-              }
-            }
+            this.mainMap.invalidateSize();
           }, 300);
         }
       },
-
-      // Initialize map with GeoJSON data
-      initMap(mapId, geoJSONData) {
-        console.log("Initializing map:", mapId);
-        
-        // Use setTimeout to ensure the DOM is fully ready
-        setTimeout(() => {
-          const mapContainer = document.getElementById(mapId);
-          
-          if (!mapContainer) {
-            console.error("Map container not found:", mapId);
-            return;
-          }
-          
-          try {
-            // If map already initialized, don't re-initialize
-            if (mapContainer._leaflet_id) {
-              console.log("Map already initialized:", mapId);
-              return;
-            }
-            
-            // Initialize the map
-            const map = L.map(mapId, {
-              center: [0, 0],
-              zoom: 2
-            });
-            
-            // Add OpenStreetMap tile layer
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            }).addTo(map);
-            
-            // Parse and add the GeoJSON data if it exists
-            if (geoJSONData && typeof geoJSONData !== 'undefined') {
-              // Convert string to object if needed
-              const geoJSON = (typeof geoJSONData === 'string') ? 
-                JSON.parse(geoJSONData) : geoJSONData;
-
-              console.log("GeoJSON data:", geoJSON);
-              
-              if (geoJSON) {
-                try {
-                  // Create a GeoJSON layer
-                  const geoLayer = L.geoJSON(geoJSON).addTo(map);
-                  
-                  // Try to fit bounds if possible
-                  if (geoLayer && geoLayer.getBounds && typeof geoLayer.getBounds === 'function') {
-                    const bounds = geoLayer.getBounds();
-                    if (bounds && !bounds.isEmpty && !bounds.isEmpty()) {
-                      map.fitBounds(bounds, { padding: [30, 30] });
-                    }
-                  }
-                } catch (e) {
-                  console.error("Error adding GeoJSON layer:", e);
-                }
-              } else {
-                console.error("Invalid GeoJSON data");
-              }
-            } else {
-              console.warn("No GeoJSON data provided");
-              
-              // Add a marker at the center as fallback
-              L.marker([0, 0]).addTo(map)
-                .bindPopup("No GeoJSON data available")
-                .openPopup();
-            }
-            
-            // Force map to redraw
-            setTimeout(() => {
-              map.invalidateSize();
-              console.log("Map size refreshed");
-            }, 100);
-            
-            console.log("Map initialization complete for:", mapId);
-            
-            // Also initialize side map if this is the first GeoJSON we've received
-            if (this.hasMap && mapId.includes('mobile-map') && !document.getElementById('side-map-container')._leaflet_id) {
-              this.initSideMap(geoJSONData);
-            }
-          } catch (e) {
-            console.error('Error initializing map:', e);
-          }
-        }, 100); // Short delay to ensure DOM is ready
-      },
-      
-      // Initialize the side map (for desktop view)
-      initSideMap(geoJSONData) {
-        console.log("Initializing side map");
-        
-        // Use setTimeout to ensure the DOM is fully ready
-        setTimeout(() => {
-          const sideMapContainer = document.getElementById('side-map-container');
-          
-          if (!sideMapContainer) {
-            console.error("Side map container not found");
-            return;
-          }
-          
-          try {
-            // Check if map already exists
-            if (sideMapContainer._leaflet_id) {
-              console.log("Side map already initialized");
-              return;
-            }
-            
-            // Initialize the map
-            const sideMap = L.map('side-map-container', {
-              center: [0, 0],
-              zoom: 2
-            });
-            
-            // Add OpenStreetMap tile layer
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            }).addTo(sideMap);
-            
-            // Parse and add the GeoJSON data if it exists
-            if (geoJSONData && typeof geoJSONData !== 'undefined') {
-              // Convert string to object if needed
-              const geoJSON = (typeof geoJSONData === 'string') ? 
-                JSON.parse(geoJSONData) : geoJSONData;
-              
-              console.log("GeoJSON data for side map:", geoJSON);
-              
-              if (geoJSON) {
-                try {
-                  // Create a GeoJSON layer
-                  const geoLayer = L.geoJSON(geoJSON).addTo(sideMap);
-                  
-                  // Try to fit bounds if possible
-                  if (geoLayer && geoLayer.getBounds && typeof geoLayer.getBounds === 'function') {
-                    const bounds = geoLayer.getBounds();
-                    if (bounds && !bounds.isEmpty && !bounds.isEmpty()) {
-                      sideMap.fitBounds(bounds, { padding: [30, 30] });
-                    }
-                  }
-                } catch (e) {
-                  console.error("Error adding GeoJSON layer to side map:", e);
-                }
-              } else {
-                console.error("Invalid GeoJSON data for side map");
-              }
-            } else {
-              console.warn("No GeoJSON data provided for side map");
-              
-              // Add a marker at the center as fallback
-              L.marker([0, 0]).addTo(sideMap)
-                .bindPopup("No GeoJSON data available")
-                .openPopup();
-            }
-            
-            // Force map to redraw
-            setTimeout(() => {
-              sideMap.invalidateSize();
-              console.log("Side map size refreshed");
-            }, 100);
-            
-            console.log("Side map initialization complete");
-          } catch (e) {
-            console.error('Error initializing side map:', e);
-          }
-        }, 300); // Longer delay for side map to ensure container is visible
-      },
-
+  
       connectWebSocket() {
         const chatID = window.location.pathname.split("/")[2];
         this.ws = new WebSocket(`wss://localhost:4000/ws/${chatID}`);
-
+  
         this.ws.addEventListener('open', () => {
           console.log('WebSocket connection established');
           this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
         });
-
+  
         this.ws.addEventListener('message', (event) => {
           let data = {};
           try {
@@ -268,7 +434,7 @@
             console.error('Error parsing JSON:', event.data);
             return;
           }
-        
+  
           // Handle possible interruption acknowledgment
           if (data.interrupted) {
             console.log("Server acknowledged interruption");
@@ -290,7 +456,7 @@
             
             return;
           }
-        
+  
           // Create response object if it doesn't exist yet
           if (!this.currentResponse) {
             this.messages.push({
@@ -301,17 +467,18 @@
             });
             this.currentResponse = this.messages[this.messages.length - 1];
           }
-        
+  
           // Handle status updates
           if (data.status) {
             this.currentResponse.statusUpdates.push(data.status.trim());
           }
-        
+  
           // Handle answer data (look for both answer and response fields)
           if (data.answer || data.response) {
-            this.currentResponse.answer = data.answer || data.response;
+            const responseText = data.answer || data.response;
+            this.currentResponse.answer = responseText;
           }
-        
+  
           // Handle GeoJSON data
           if (data.geoJSON) {
             console.log("Received GeoJSON data");
@@ -327,37 +494,24 @@
               }
             }
             
+            // Store the GeoJSON in the current response
             this.currentResponse.geoJSON = parsedGeoJSON;
-            this.hasMap = true; // Set hasMap to true when we get GeoJSON data
             
-            // Initialize map after a short delay to ensure DOM is ready
+            // Add to map collection with user's original question
+            const userLastMessage = this.messages.findLast(m => m.sender === 'You');
+            const userQuestion = userLastMessage ? userLastMessage.text : '';
+            this.addMapToCollection(parsedGeoJSON, userQuestion);
+            
+            // Set map flags
+            this.hasMap = true;
+            this.mapVisible = true;
+            
+            // Refresh layout
             this.$nextTick(() => {
-              console.log("Ready to initialize map");
-              // If we have a side-map-container and it's visible, initialize it
-              const sideMapEl = document.getElementById('side-map-container');
-              if (sideMapEl && this.mapVisible) {
-                console.log("Initializing side map");
-                this.initMap('side-map-container', parsedGeoJSON);
-              }
-              
-              // Find the current mobile map element
-              const currentIndex = this.messages.indexOf(this.currentResponse);
-              if (currentIndex >= 0) {
-                const mobileMapId = `mobile-map-${currentIndex}`;
-                console.log("Mobile map ID:", mobileMapId);
-                
-                // Wait a bit longer to ensure the mobile map is in the DOM
-                setTimeout(() => {
-                  const mobileMapEl = document.getElementById(mobileMapId);
-                  if (mobileMapEl) {
-                    console.log("Initializing mobile map");
-                    this.initMap(mobileMapId, parsedGeoJSON);
-                  }
-                }, 300);
-              }
+              this.refreshMap();
             });
           }
-        
+  
           // Finalize the response if we have answer or GeoJSON
           if (data.answer || data.response || data.geoJSON) {
             // Calculate response time
@@ -370,53 +524,53 @@
             this.currentResponse = null;
             this.isProcessing = false;
           }
-        
+  
           this.$nextTick(() => {
             this.scrollToBottom();
           });
         });
-
+  
         this.ws.addEventListener('close', (event) => {
           console.log('WebSocket connection closed', event);
-
+  
           // If we were in the middle of a response, mark it as incomplete
           if (this.isProcessing) {
             if (this.currentResponse) {
               this.currentResponse.statusUpdates.push("Connection closed unexpectedly. Please try again.");
               this.currentResponse.answer = this.currentResponse.answer || "Response interrupted. Please try again.";
-
+  
               // Add response time even for incomplete responses
               if (this.responseStartTime) {
                 const responseTime = new Date() - this.responseStartTime;
                 this.currentResponse.responseTime = this.formatResponseTime(responseTime) + " (incomplete)";
                 this.responseStartTime = null;
               }
-
+  
               this.currentResponse = null;
             }
             this.isProcessing = false;
           }
-
+  
           // Attempt to reconnect if not a normal closure and within max attempts
           if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
             const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), 10000);
             console.log(`Attempting to reconnect in ${delay}ms...`);
-
+  
             this.reconnectTimeout = setTimeout(() => {
               this.reconnectAttempts++;
               this.connectWebSocket();
             }, delay);
           }
         });
-
+  
         this.ws.addEventListener('error', (error) => {
           console.error('WebSocket error:', error);
         });
       },
-
+  
       sendMessage() {
         if (!this.inputMessage.trim() || this.isProcessing) return;
-
+  
         // Check WebSocket state
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
           console.error('WebSocket is not open');
@@ -427,44 +581,44 @@
           this.connectWebSocket();
           return;
         }
-
+  
         this.isProcessing = true; // Disable input form while processing
         this.responseStartTime = new Date(); // Start timing the response
-
+  
         this.messages.push({
           sender: 'You',
           text: this.inputMessage
         });
-
+  
         this.messages.push({
           sender: 'AI',
           statusUpdates: [],
           answer: '',
           geoJSON: null
         });
-
+  
         this.currentResponse = this.messages[this.messages.length - 1];
-
+  
         this.ws.send(JSON.stringify({
           message: this.inputMessage,
           dbUsed: this.dbUsed,
           docsUsed: this.docsUsed
         }));
-
+  
         this.inputMessage = '';
         this.$nextTick(() => {
           this.scrollToBottom();
           this.autoResizeTextarea();
         });
       },
-
+  
       scrollToBottom() {
         const chatMessages = document.getElementById('chatMessages');
         if (chatMessages) {
           chatMessages.scrollTop = chatMessages.scrollHeight;
         }
       },
-
+  
       checkScroll() {
         const chatMessages = document.getElementById('chatMessages');
         if (chatMessages) {
@@ -472,7 +626,7 @@
           this.showScrollButton = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight > 200;
         }
       },
-
+  
       formatResponseTime(milliseconds) {
         if (milliseconds < 1000) {
           return `${milliseconds}ms`;
@@ -484,7 +638,7 @@
           return `${minutes}m ${seconds}s`;
         }
       },
-
+  
       formatMarkdown(text) {
         if (!text) return '';
         // Make sure marked is loaded
@@ -498,19 +652,19 @@
         }
         return text; // Fallback if marked.js isn't loaded yet
       },
-
+  
       autoResizeTextarea() {
         const textarea = this.$refs.messageInput;
         if (textarea) {
           // Reset height to get proper scrollHeight
           textarea.style.height = 'auto';
-
+  
           // Set new height (with min/max constraints handled by CSS)
           const newHeight = Math.min(Math.max(textarea.scrollHeight, 60), 200);
           textarea.style.height = `${newHeight}px`;
         }
       }
-    }
+    };
   }
 </script>
 {{end}}

@@ -10,16 +10,31 @@
   crossorigin=""></script>
 
 <style>
+  /* Animations for map panel */
+  @keyframes slide-in {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+  
+  .animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+  }
+  
   /* Ensure Leaflet is styled properly */
-  #side-map-container {
+  #main-map-container {
     min-height: 300px;
-    height: calc(100vh - 120px);
+    height: 100%;
     width: 100%;
     z-index: 1;
   }
   
-  [class*="mobile-map-"] {
-    min-height: 250px;
+  [class*="map-thumb-"] {
+    min-height: 100%;
+  }
+  
+  /* Remove leaflet attribution from thumbnails */
+  .leaflet-control-attribution {
+    display: none;
   }
   
   /* Leaflet marker and control styles need specificity to override Leaflet defaults */
@@ -34,6 +49,20 @@
   /* Fix any potential z-index issues with map controls */
   .leaflet-top, .leaflet-bottom {
     z-index: 400 !important;
+  }
+  
+  /* Transition for layout changes */
+  .flex-1 {
+    transition: width 0.3s ease-out;
+  }
+  
+  /* Thumbnail style hover effects */
+  [id^="map-thumb-"] {
+    transition: transform 0.2s ease;
+  }
+  
+  [id^="map-thumb-"]:hover {
+    transform: scale(1.05);
   }
   
   /* Markdown content styling */
@@ -147,6 +176,13 @@
   .dark .markdown-content th,
   .dark .markdown-content td {
     border-color: #4a5568;
+  }
+  
+  /* Make sure the mobile messages display stays on top of map in mobile view */
+  @media (max-width: 768px) {
+    #chatMessages {
+      z-index: 5;
+    }
   }
 </style>
 {{end}}
