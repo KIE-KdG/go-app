@@ -31,7 +31,6 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodPost, "/chat", protected.ThenFunc(app.newChatPost))
 	router.Handler(http.MethodGet, "/chat/:id", protected.ThenFunc(app.chat))
 	router.Handler(http.MethodGet, "/map", protected.ThenFunc(app.mapView))
-	router.Handler(http.MethodPost, "/api/chat", protected.ThenFunc(app.chatHandler))
 	router.Handler(http.MethodPost, "/api/geojson", protected.ThenFunc(app.geoJsonHandler))
 	router.Handler(http.MethodGet, "/ws/:id", chatIDMiddleware(protected.ThenFunc(app.handleConnections)))
 	router.Handler(http.MethodPost, "/user/logout", protected.ThenFunc(app.userLogoutPost))

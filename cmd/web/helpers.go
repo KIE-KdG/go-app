@@ -163,12 +163,3 @@ func (app *application) setFlashAndRedirect(w http.ResponseWriter, r *http.Reque
 	app.sessionManager.Put(r.Context(), "flash", flashMessage)
 	http.Redirect(w, r, redirectURL, status)
 }
-
-// sendWSJSON marshals and sends data as a WebSocket TextMessage
-func sendWSJSON(ws *websocket.Conn, data interface{}) error {
-	jsonRes, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-	return ws.WriteMessage(websocket.TextMessage, jsonRes)
-}

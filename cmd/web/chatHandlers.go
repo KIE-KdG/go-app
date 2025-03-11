@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -81,33 +80,6 @@ type ChatRequest struct {
 
 type ChatResponse struct {
 	Response string `json:"response"`
-}
-
-func (app *application) chatHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		app.clientError(w, http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req ChatRequest
-	if err := app.readJSON(w, r, &req); err != nil {
-		return
-	}
-
-	jsonData, err := json.Marshal(req)
-	if err != nil {
-		app.serverError(w, err)
-		return
-	}
-
-	promptResponse, err := app.chatPort.ForwardMessage(string(jsonData))
-	if err != nil {
-		app.serverError(w, err)
-		return
-	}
-
-	res := ChatResponse{Response: promptResponse}
-	app.writeJSON(w, http.StatusOK, res)
 }
 
 func (app *application) geoJsonHandler(w http.ResponseWriter, r *http.Request) {
