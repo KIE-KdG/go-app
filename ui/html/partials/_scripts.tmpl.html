@@ -23,12 +23,16 @@
       showScrollButton: false,
       responseStartTime: null,
       hasMap: false,
-      mapVisible: true,
+      mapVisible: false,
       isFullscreenMapOpen: false,
+      sideMap: null,
+      fullscreenMap: null,
+      currentMapData: null,
       fullscreenMapData: null,
-      fullscreenMapIndex: null,
-      inlineMaps: {}, // Store references to inline maps
-      mapTileLayers: {}, // Store tile layers for each map
+      mapTileLayers: {
+        side: {},
+        fullscreen: {}
+      },
       
       init() {
         this.connectWebSocket();
@@ -46,89 +50,83 @@
         
         // Add resize event listener
         window.addEventListener('resize', () => {
-          this.refreshAllMaps();
+          this.refreshMaps();
         });
       },
       
-      // Toggle map visibility for a specific message
-      toggleMapForMessage(index) {
-        if (!this.messages[index] || !this.messages[index].geoJSON) return;
+      // Show map from a specific message
+      showMapFromMessage(geoJSON) {
+        this.currentMapData = geoJSON;
+        this.mapVisible = true;
         
-        // Toggle the showMap property
-        this.messages[index].showMap = !this.messages[index].showMap;
-        
-        // Initialize map if needed
-        if (this.messages[index].showMap) {
-          this.$nextTick(() => {
-            this.initInlineMap('map-' + index, this.messages[index].geoJSON);
-          });
-        }
+        // Initialize the side map after a short delay
+        this.$nextTick(() => {
+          setTimeout(() => {
+            this.initSideMap();
+          }, 300);
+        });
       },
       
-      // Initialize an inline map within a message
-      initInlineMap(containerId, geoJSON) {
-        setTimeout(() => {
-          const container = document.getElementById(containerId);
-          if (!container) {
-            console.error("Map container not found:", containerId);
+      // Initialize the side map
+      initSideMap() {
+        const container = document.getElementById('side-map-container');
+        if (!container || !this.currentMapData) return;
+        
+        try {
+          // Check if map already exists
+          if (this.sideMap) {
+            // Clear existing GeoJSON layers
+            this.sideMap.eachLayer(layer => {
+              if (layer instanceof L.GeoJSON) {
+                this.sideMap.removeLayer(layer);
+              }
+            });
+            
+            // Add new GeoJSON data
+            this.addGeoJSONToMap(this.sideMap, this.currentMapData);
+            this.sideMap.invalidateSize();
             return;
           }
           
-          try {
-            // If map already initialized, don't reinitialize
-            if (this.inlineMaps[containerId]) {
-              console.log("Map already exists, refreshing:", containerId);
-              this.inlineMaps[containerId].invalidateSize();
-              return;
-            }
-            
-            console.log("Initializing inline map:", containerId);
-            
-            // Create new map
-            const map = L.map(containerId, {
-              center: [51.05, 3.7], // Default to Belgium
-              zoom: 10,
-              zoomControl: true,
-              attributionControl: true
-            });
-            
-            // Save reference
-            this.inlineMaps[containerId] = map;
-            this.mapTileLayers[containerId] = {};
-            
-            // Setup base maps
-            this.mapTileLayers[containerId] = {
-              osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              }),
-              satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-              }),
-              topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-                attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://opentopomap.org">OpenTopoMap</a>'
-              })
-            };
-            
-            // Add default basemap
-            this.mapTileLayers[containerId].osm.addTo(map);
-            
-            // Add GeoJSON data
-            this.addGeoJSONToMap(map, geoJSON);
-            
-            // Force a size refresh
-            setTimeout(() => {
-              map.invalidateSize();
-            }, 300);
-          } catch (e) {
-            console.error("Error initializing inline map:", e);
-          }
-        }, 100);
+          // Create new map
+          this.sideMap = L.map('side-map-container', {
+            center: [51.05, 3.7],
+            zoom: 10,
+            zoomControl: true,
+            attributionControl: true
+          });
+          
+          // Setup base maps
+          this.mapTileLayers.side = {
+            osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }),
+            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+              attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            }),
+            topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+              attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://opentopomap.org">OpenTopoMap</a>'
+            })
+          };
+          
+          // Add default basemap
+          this.mapTileLayers.side.osm.addTo(this.sideMap);
+          
+          // Add GeoJSON data
+          this.addGeoJSONToMap(this.sideMap, this.currentMapData);
+          
+          // Force a size refresh
+          setTimeout(() => {
+            this.sideMap.invalidateSize();
+          }, 300);
+        } catch (e) {
+          console.error("Error initializing side map:", e);
+        }
       },
       
       // Open the fullscreen map modal
-      openMapFullscreen(geoJSON, index) {
-        this.fullscreenMapData = geoJSON;
-        this.fullscreenMapIndex = index;
+      openMapFullscreen(geoJSON) {
+        this.fullscreenMapData = geoJSON || this.currentMapData;
         this.isFullscreenMapOpen = true;
         
         // Initialize the fullscreen map after the modal is shown
@@ -142,8 +140,6 @@
       // Close the fullscreen map modal
       closeFullscreenMap() {
         this.isFullscreenMapOpen = false;
-        this.fullscreenMapData = null;
-        this.fullscreenMapIndex = null;
       },
       
       // Initialize the fullscreen map
@@ -153,26 +149,30 @@
         
         try {
           // Check if map already exists
-          if (this.inlineMaps['fullscreen-map']) {
-            // Remove existing map
-            this.inlineMaps['fullscreen-map'].remove();
-            delete this.inlineMaps['fullscreen-map'];
+          if (this.fullscreenMap) {
+            // Clear existing GeoJSON layers
+            this.fullscreenMap.eachLayer(layer => {
+              if (layer instanceof L.GeoJSON) {
+                this.fullscreenMap.removeLayer(layer);
+              }
+            });
+            
+            // Add new GeoJSON data
+            this.addGeoJSONToMap(this.fullscreenMap, this.fullscreenMapData);
+            this.fullscreenMap.invalidateSize();
+            return;
           }
           
           // Create new map
-          const map = L.map('fullscreen-map', {
+          this.fullscreenMap = L.map('fullscreen-map', {
             center: [51.05, 3.7],
             zoom: 10,
             zoomControl: true,
             attributionControl: true
           });
           
-          // Save reference
-          this.inlineMaps['fullscreen-map'] = map;
-          this.mapTileLayers['fullscreen-map'] = {};
-          
           // Setup base maps
-          this.mapTileLayers['fullscreen-map'] = {
+          this.mapTileLayers.fullscreen = {
             osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
               attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             }),
@@ -185,14 +185,14 @@
           };
           
           // Add default basemap
-          this.mapTileLayers['fullscreen-map'].osm.addTo(map);
+          this.mapTileLayers.fullscreen.osm.addTo(this.fullscreenMap);
           
           // Add GeoJSON data
-          this.addGeoJSONToMap(map, this.fullscreenMapData);
+          this.addGeoJSONToMap(this.fullscreenMap, this.fullscreenMapData);
           
           // Force a size refresh
           setTimeout(() => {
-            map.invalidateSize();
+            this.fullscreenMap.invalidateSize();
           }, 300);
         } catch (e) {
           console.error("Error initializing fullscreen map:", e);
@@ -200,11 +200,18 @@
       },
       
       // Change map style for a specific map
-      changeMapStyle(style, mapId) {
-        if (!this.inlineMaps[mapId] || !this.mapTileLayers[mapId]) return;
+      changeMapStyle(style, mapId = null) {
+        let map, tileLayers;
         
-        const map = this.inlineMaps[mapId];
-        const tileLayers = this.mapTileLayers[mapId];
+        if (mapId === 'fullscreen-map') {
+          map = this.fullscreenMap;
+          tileLayers = this.mapTileLayers.fullscreen;
+        } else {
+          map = this.sideMap;
+          tileLayers = this.mapTileLayers.side;
+        }
+        
+        if (!map || !tileLayers) return;
         
         // Remove all base layers
         Object.values(tileLayers).forEach(layer => {
@@ -353,15 +360,16 @@
         return '#3388ff'; // Default blue
       },
       
-      // Refresh all maps when needed
-      refreshAllMaps() {
-        // Timeout to ensure the DOM has updated
+      // Refresh maps when needed
+      refreshMaps() {
         setTimeout(() => {
-          Object.entries(this.inlineMaps).forEach(([id, map]) => {
-            if (map) {
-              map.invalidateSize();
-            }
-          });
+          if (this.sideMap && this.mapVisible) {
+            this.sideMap.invalidateSize();
+          }
+          
+          if (this.fullscreenMap && this.isFullscreenMapOpen) {
+            this.fullscreenMap.invalidateSize();
+          }
         }, 300);
       },
       
@@ -396,16 +404,16 @@
           this.isProcessing = false;
         }
       },
-  
+      
       connectWebSocket() {
         const chatID = window.location.pathname.split("/")[2];
         this.ws = new WebSocket(`wss://localhost:4000/ws/${chatID}`);
-      
+  
         this.ws.addEventListener('open', () => {
           console.log('WebSocket connection established');
           this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
         });
-      
+  
         this.ws.addEventListener('message', (event) => {
           let data = {};
           try {
@@ -414,7 +422,7 @@
             console.error('Error parsing JSON:', event.data);
             return;
           }
-      
+  
           // Handle possible interruption acknowledgment
           if (data.interrupted) {
             console.log("Server acknowledged interruption");
@@ -436,30 +444,29 @@
             
             return;
           }
-      
+  
           // Create response object if it doesn't exist yet
           if (!this.currentResponse) {
             this.messages.push({
               sender: 'AI',
               statusUpdates: [],
               answer: '',
-              geoJSON: null,
-              showMap: false // Default to hidden map
+              geoJSON: null
             });
             this.currentResponse = this.messages[this.messages.length - 1];
           }
-      
+  
           // Handle status updates
           if (data.status) {
             this.currentResponse.statusUpdates.push(data.status.trim());
           }
-      
+  
           // Handle answer data (look for both answer and response fields)
           if (data.answer || data.response) {
             const responseText = data.answer || data.response;
             this.currentResponse.answer = responseText;
           }
-      
+  
           // Handle GeoJSON data
           if (data.geoJSON) {
             console.log("Received GeoJSON data");
@@ -477,12 +484,11 @@
             
             // Store the GeoJSON in the current response
             this.currentResponse.geoJSON = parsedGeoJSON;
-            this.currentResponse.showMap = false; // Start with map hidden
             
             // Set flag indicating maps are available
             this.hasMap = true;
           }
-      
+  
           // Finalize the response if we have answer or GeoJSON
           if (data.answer || data.response || data.geoJSON) {
             // Calculate response time
@@ -495,50 +501,50 @@
             this.currentResponse = null;
             this.isProcessing = false;
           }
-      
+  
           this.$nextTick(() => {
             this.scrollToBottom();
           });
         });
-      
+  
         this.ws.addEventListener('close', (event) => {
           console.log('WebSocket connection closed', event);
-      
+  
           // If we were in the middle of a response, mark it as incomplete
           if (this.isProcessing) {
             if (this.currentResponse) {
               this.currentResponse.statusUpdates.push("Connection closed unexpectedly. Please try again.");
               this.currentResponse.answer = this.currentResponse.answer || "Response interrupted. Please try again.";
-      
+  
               // Add response time even for incomplete responses
               if (this.responseStartTime) {
                 const responseTime = new Date() - this.responseStartTime;
                 this.currentResponse.responseTime = this.formatResponseTime(responseTime) + " (incomplete)";
                 this.responseStartTime = null;
               }
-      
+  
               this.currentResponse = null;
             }
             this.isProcessing = false;
           }
-      
+  
           // Attempt to reconnect if not a normal closure and within max attempts
           if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
             const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), 10000);
             console.log(`Attempting to reconnect in ${delay}ms...`);
-      
+  
             this.reconnectTimeout = setTimeout(() => {
               this.reconnectAttempts++;
               this.connectWebSocket();
             }, delay);
           }
         });
-      
+  
         this.ws.addEventListener('error', (error) => {
           console.error('WebSocket error:', error);
         });
       },
-      
+  
       sendMessage() {
         if (!this.inputMessage.trim() || this.isProcessing) return;
   

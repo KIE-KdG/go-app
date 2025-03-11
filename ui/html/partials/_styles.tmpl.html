@@ -20,21 +20,15 @@
     animation: slide-in 0.3s ease-out;
   }
   
-  /* Ensure Leaflet is styled properly */
-  #main-map-container {
-    min-height: 300px;
-    height: 100%;
+  /* Ensure chat container stays at fixed width */
+  .max-w-3xl {
+    max-width: 48rem;
+  }
+  
+  /* Side map panel styling */
+  #side-map-container, #fullscreen-map {
     width: 100%;
-    z-index: 1;
-  }
-  
-  [class*="map-thumb-"] {
-    min-height: 100%;
-  }
-  
-  /* Remove leaflet attribution from thumbnails */
-  .leaflet-control-attribution {
-    display: none;
+    height: 100%;
   }
   
   /* Leaflet marker and control styles need specificity to override Leaflet defaults */
@@ -51,18 +45,25 @@
     z-index: 400 !important;
   }
   
-  /* Transition for layout changes */
-  .flex-1 {
-    transition: width 0.3s ease-out;
-  }
-  
-  /* Thumbnail style hover effects */
-  [id^="map-thumb-"] {
+  /* Map button hover effects */
+  button:hover svg {
+    transform: scale(1.1);
     transition: transform 0.2s ease;
   }
   
-  [id^="map-thumb-"]:hover {
-    transform: scale(1.05);
+  /* Make sure the mobile screen doesn't get messed up */
+  @media (max-width: 1024px) {
+    .fixed.right-0.w-\[600px\] {
+      width: calc(100% - 48rem);
+      min-width: 300px;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .fixed.right-0.w-\[600px\] {
+      width: 100%;
+      z-index: 1000;
+    }
   }
   
   /* Markdown content styling */
@@ -176,13 +177,6 @@
   .dark .markdown-content th,
   .dark .markdown-content td {
     border-color: #4a5568;
-  }
-  
-  /* Make sure the mobile messages display stays on top of map in mobile view */
-  @media (max-width: 768px) {
-    #chatMessages {
-      z-index: 5;
-    }
   }
 </style>
 {{end}}
