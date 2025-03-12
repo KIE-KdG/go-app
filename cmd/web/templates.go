@@ -14,7 +14,7 @@ type templateData struct {
 	CurrentYear     int
 	Chats           []*models.Chat
 	Messages        []*models.Message
-	GeoData         map[string]interface{}
+	GeoData         string
 	Form            any
 	Flash           string
 	IsAuthenticated bool

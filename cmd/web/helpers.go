@@ -92,27 +92,17 @@ func (app *application) userIdFromSession(r *http.Request) int {
 	return app.sessionManager.GetInt(r.Context(), "authenticatedUserID")
 }
 
-// New helper functions
-
-// writeJSON writes a JSON response with the specified status code and data
-func (app *application) writeJSON(w http.ResponseWriter, status int, data interface{}, headers ...http.Header) error {
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	// Add any custom headers
-	if len(headers) > 0 {
-		for key, value := range headers[0] {
-			w.Header()[key] = value
-		}
-	}
-
+// writeJSON encodes an interface to a JSON response
+func (app *application) writeJSON(w http.ResponseWriter, status int, data interface{}) {
+	// Set the Content-Type header
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	w.Write(jsonData)
-
-	return nil
+	
+	// Encode the data to JSON
+	err := json.NewEncoder(w).Encode(data)
+	if err != nil {
+		app.serverError(w, err)
+	}
 }
 
 // readJSON decodes a JSON request body into a destination struct
@@ -128,6 +118,34 @@ func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst int
 	}
 
 	return nil
+}
+
+// debugGeoJSON ensures we're generating valid JSON for the template
+func (app *application) debugGeoJSON(geoJsonMap map[string]interface{}) (string, error) {
+	// Marshal the map to pretty JSON 
+	jsonBytes, err := json.MarshalIndent(geoJsonMap, "", "  ")
+	if err != nil {
+		return "", err
+	}
+
+	// Convert to string
+	jsonStr := string(jsonBytes)
+
+	// Log a sample of the JSON for debugging
+	if len(jsonStr) > 100 {
+		app.infoLog.Printf("JSON sample (first 100 chars): %s...", jsonStr[:100])
+	} else {
+		app.infoLog.Printf("JSON sample: %s", jsonStr)
+	}
+
+	// Validate the JSON by attempting to parse it back
+	var validate interface{}
+	if err := json.Unmarshal(jsonBytes, &validate); err != nil {
+		app.errorLog.Printf("Generated invalid JSON: %v", err)
+		return "", fmt.Errorf("generated invalid JSON: %w", err)
+	}
+
+	return jsonStr, nil
 }
 
 // parseUUID parses a UUID string and handles errors
