@@ -15,13 +15,16 @@
       showScrollButton: false,
       responseStartTime: null,
       hasMap: false,
-      mapOverlayVisible: false,
+      mapOverlayVisible: false,      // For toggling the map overlay
       isFullscreen: false,
       currentGeoJSON: null,
       overlayMap: null,
       mapStyles: {},
       
       init() {
+        // Initialize values to prevent errors
+        console.log("Initializing chat app");
+        
         this.connectWebSocket();
         this.$nextTick(() => {
           this.scrollToBottom();
@@ -52,6 +55,7 @@
       
       // Open map overlay with the given GeoJSON data
       openMapOverlay(geoJSON) {
+        console.log("Opening map overlay with GeoJSON data:", geoJSON ? "yes" : "no");
         this.currentGeoJSON = geoJSON;
         this.mapOverlayVisible = true;
         
@@ -105,9 +109,14 @@
       // Initialize the overlay map
       initOverlayMap() {
         const mapContainer = document.getElementById('overlay-map');
-        if (!mapContainer || !this.currentGeoJSON) return;
+        if (!mapContainer || !this.currentGeoJSON) {
+          console.error("Missing map container or GeoJSON data");
+          return;
+        }
         
         try {
+          console.log("Initializing overlay map");
+          
           // If map already exists, just update the GeoJSON and refresh
           if (this.overlayMap) {
             this.addGeoJSONToMap(this.overlayMap, this.currentGeoJSON);
@@ -139,10 +148,12 @@
           this.mapStyles.overlay.osm.addTo(this.overlayMap);
           
           // Add GeoJSON data
+          console.log("Adding GeoJSON to map");
           this.addGeoJSONToMap(this.overlayMap, this.currentGeoJSON);
           
           // Force a size refresh
           setTimeout(() => {
+            console.log("Refreshing map size");
             this.overlayMap.invalidateSize();
           }, 200);
         } catch (e) {
@@ -181,8 +192,11 @@
         map.eachLayer(layer => {
           if (layer instanceof L.GeoJSON) {
             try {
-              if (layer.getBounds && layer.getBounds().isValid()) {
-                map.fitBounds(layer.getBounds(), { padding: [30, 30] });
+              if (layer.getBounds && typeof layer.getBounds === 'function') {
+                const bounds = layer.getBounds();
+                if (bounds && bounds._northEast && bounds._southWest) {
+                  map.fitBounds(bounds, { padding: [30, 30] });
+                }
               }
             } catch (e) {
               console.warn("Could not fit to bounds:", e);
@@ -278,10 +292,29 @@
           // Create and add GeoJSON layer
           const geoLayer = L.geoJSON(geoJSON, geoJsonOptions).addTo(map);
           
-          // Fit bounds to GeoJSON
+          // Fit bounds to GeoJSON - with better error handling
           try {
-            if (geoLayer.getBounds && !geoLayer.getBounds().isEmpty()) {
-              map.fitBounds(geoLayer.getBounds(), { padding: [30, 30] });
+            // First check if the layer has a getBounds method
+            if (geoLayer.getBounds && typeof geoLayer.getBounds === 'function') {
+              const bounds = geoLayer.getBounds();
+              
+              // Check if bounds exist and are valid
+              // Different Leaflet versions have different validity checks
+              if (bounds && 
+                  (bounds._northEast && bounds._southWest) && // Has valid corners
+                  (bounds._northEast.lat !== undefined) &&    // Coordinates exist
+                  (bounds._northEast.lat !== bounds._southWest.lat || 
+                   bounds._northEast.lng !== bounds._southWest.lng)) // Not a single point
+              {
+                map.fitBounds(bounds, { padding: [30, 30] });
+                console.log("Successfully fit map to bounds");
+              } else {
+                console.warn("Invalid or empty bounds");
+                map.setView([51.05, 3.7], 10);
+              }
+            } else {
+              console.warn("Layer doesn't have getBounds method");
+              map.setView([51.05, 3.7], 10);
             }
           } catch (e) {
             console.warn("Could not fit to bounds:", e);
