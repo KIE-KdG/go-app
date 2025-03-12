@@ -6,8 +6,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type ChatPort struct {
+type ChatURL struct {
 	Port string
+	Link string
 }
 
 // ChatRequest represents the new schema for chat requests
@@ -24,7 +25,7 @@ type ChatRequest struct {
 // ForwardMessageWithStream sends a message to the connected websocket server
 // and returns a channel that streams the responses back.
 // The channel will be closed when the response is complete or if there's an error.
-func (c *ChatPort) ForwardMessageWithStream(
+func (c *ChatURL) ForwardMessageWithStream(
 	message string,
 	dbUsed bool,
 	docsUsed bool,
@@ -32,7 +33,7 @@ func (c *ChatPort) ForwardMessageWithStream(
 	userID string,
 	chatID string,
 ) (<-chan string, error) {
-	otherServer := "ws://localhost" + c.Port + "/ws/documents/search"
+	otherServer := "ws://localhost" + c.Port + "/ws" + c.Link
 	conn, _, err := websocket.DefaultDialer.Dial(otherServer, nil)
 	if err != nil {
 		return nil, err

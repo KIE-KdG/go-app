@@ -5,12 +5,6 @@
     display: none !important; 
   }
   
-  /* Make sure the map container takes up full space */
-  #overlay-map {
-    width: 100%;
-    height: 100%;
-  }
-  
   /* Status dropdown styling */
   .dropdown summary {
     list-style: none;
@@ -173,6 +167,155 @@
   }
   
   /* Fullscreen styles */
+  :-webkit-full-screen .map-overlay,
+  :-ms-fullscreen .map-overlay,
+  :-moz-full-screen .map-overlay {
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  /* These styles should be added to _styles.tmpl.html */
+
+/* Map overlay and container styles */
+.map-overlay {
+  overflow: hidden;
+}
+
+#overlay-map {
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+}
+
+/* Thumbnail maps styling */
+[id^="map-thumb-"] {
+  pointer-events: none; /* Disable panning/zooming in thumbnails */
+}
+
+/* Feature info panel styling */
+.feature-info-panel {
+  max-height: 30%;
+  transition: all 0.3s ease;
+}
+
+.feature-info-panel pre {
+  font-family: monospace;
+  font-size: 0.8rem;
+  background-color: rgba(0, 0, 0, 0.05);
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  overflow-x: auto;
+}
+
+/* Map thumbnail selection highlight */
+.map-thumbnail-selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+/* Enhance map button appearance */
+.map-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.map-button:hover svg {
+  transform: scale(1.1);
+}
+
+/* Map navigation buttons */
+.map-nav-button {
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+.map-nav-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Fullscreen mode enhancements */
+:fullscreen .map-overlay,
+:-webkit-full-screen .map-overlay,
+:-ms-fullscreen .map-overlay,
+:-moz-full-screen .map-overlay {
+  width: 100vw !important;
+  height: 100vh !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+}
+
+:fullscreen #overlay-map,
+:-webkit-full-screen #overlay-map,
+:-ms-fullscreen #overlay-map,
+:-moz-full-screen #overlay-map {
+  height: calc(100vh - 140px) !important;
+}
+
+/* Improve Leaflet control visibility in dark mode */
+.dark .leaflet-control {
+  background-color: var(--base-100);
+  color: var(--base-content);
+}
+
+.dark .leaflet-control a {
+  color: var(--base-content);
+}
+
+.dark .leaflet-popup-content-wrapper, 
+.dark .leaflet-popup-tip {
+  background-color: var(--base-200);
+  color: var(--base-content);
+}
+</style>
+{{end}}
+
+{{define "map_styles"}}
+<style>
+  /* Hide the map overlay by default */
+  .map-overlay {
+    display: none;
+  }
+  
+  /* Show the map overlay when visible */
+  .map-overlay.visible {
+    display: flex;
+  }
+  
+  /* Make sure the map container takes up full space */
+  #overlay-map {
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+  }
+  
+  /* Fix for Leaflet default marker icon */
+  .leaflet-default-icon-path {
+    background-image: url("https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png");
+  }
+  
+  /* Fix Leaflet control zindex issues */
+  .leaflet-control-container .leaflet-control {
+    z-index: 800;
+  }
+  
+  /* Ensure Leaflet popups appear above other elements */
+  .leaflet-popup {
+    z-index: 900;
+  }
+  
+  /* Smoother transitions for interactive elements */
+  .leaflet-interactive {
+    transition: stroke-width 0.2s ease, stroke-opacity 0.2s ease, fill-opacity 0.2s ease;
+  }
+  
+  /* Fullscreen map styles */
   :fullscreen .map-overlay,
   :-webkit-full-screen .map-overlay,
   :-ms-fullscreen .map-overlay,
@@ -182,6 +325,11 @@
     margin: 0 !important;
     padding: 0 !important;
     border-radius: 0 !important;
+  }
+  
+  /* Hide elements until Alpine.js is loaded */
+  [x-cloak] {
+    display: none !important;
   }
 </style>
 {{end}}

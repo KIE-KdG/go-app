@@ -21,7 +21,7 @@
           <circle cx="8.5" cy="8.5" r="1.5"></circle>
           <polyline points="21 15 16 10 5 21"></polyline>
         </svg>
-        Map Visualization
+        GeoJSON Visualization
       </h3>
       
       <div class="flex items-center gap-2">
@@ -54,39 +54,34 @@
       </div>
     </div>
     
+    <!-- Feature count and info -->
+    <div class="px-3 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <!-- Feature count badge -->
+        <div class="badge badge-primary" x-text="getFeatureCount(currentGeoJSON) + ' features'"></div>
+      </div>
+      
+      <!-- Base map selector -->
+      <div class="flex items-center gap-2">
+        <label class="text-sm font-medium">Map Style:</label>
+        <select @change="changeMapStyle($event.target.value, 'overlay')" 
+                class="select select-sm select-bordered rounded">
+          <option value="osm">OpenStreetMap</option>
+          <option value="satellite">Satellite</option>
+          <option value="topo">Topographic</option>
+        </select>
+      </div>
+    </div>
+    
     <!-- Map visualization -->
     <div class="flex-1 relative">
       <div id="overlay-map" class="absolute inset-0"></div>
     </div>
     
     <!-- Map controls -->
-    <div class="p-3 border-t border-gray-200 dark:border-gray-700 flex flex-wrap justify-between items-center">
-      <!-- Left side controls -->
-      <div class="flex items-center gap-4">
-        <!-- Base map selector -->
-        <div class="flex items-center gap-2">
-          <label class="text-sm font-medium">Map Style:</label>
-          <select @change="changeMapStyle($event.target.value, 'overlay')" 
-                  class="select select-sm select-bordered rounded">
-            <option value="osm">OpenStreetMap</option>
-            <option value="satellite">Satellite</option>
-            <option value="topo">Topographic</option>
-          </select>
-        </div>
-        
-        <!-- Feature count -->
-        <div class="text-sm">
-          <span x-show="currentGeoJSON">
-            Features: <span x-text="getFeatureCount(currentGeoJSON)"></span>
-          </span>
-        </div>
-      </div>
-      
-      <!-- Right side controls -->
-      <div class="flex items-center gap-2">
-        <button @click="resetMapView('overlay')" class="btn btn-sm">Reset View</button>
-        <button @click="closeMapOverlay()" class="btn btn-sm btn-primary">Close</button>
-      </div>
+    <div class="p-3 border-t border-gray-200 dark:border-gray-700 flex justify-end items-center">
+      <button @click="resetMapView('overlay')" class="btn btn-sm mr-2">Reset View</button>
+      <button @click="closeMapOverlay()" class="btn btn-sm btn-primary">Close</button>
     </div>
   </div>
 </div>

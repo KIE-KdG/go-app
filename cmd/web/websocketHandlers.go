@@ -141,7 +141,7 @@ func (app *application) handleConnections(w http.ResponseWriter, r *http.Request
 				userID := req.UserID
 
 				// Forward the message with the new schema fields
-				promptResponse, err := app.chatPort.ForwardMessageWithStream(
+				promptResponse, err := app.chatURL.ForwardMessageWithStream(
 					message,
 					req.DBUsed,
 					req.DocsUsed,
