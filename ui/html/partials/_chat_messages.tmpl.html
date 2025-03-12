@@ -49,8 +49,9 @@
           <div x-show="message.answer" class="markdown-content text-black dark:text-white"
             x-html="formatMarkdown(message.answer)"></div>
           
-          <!-- Map toggle button - only show if there's GeoJSON data -->
-          <div x-show="message.geoJSON" class="mt-3 mb-2 flex justify-between items-center">
+          <!-- Map toggle button - only show if there's valid GeoJSON data -->
+          <div x-show="message.geoJSON && typeof message.geoJSON === 'object' && message.geoJSON !== null" 
+               class="mt-3 mb-2 flex justify-between items-center">
             <button 
               @click="toggleMapForMessage(index)"
               class="btn btn-sm btn-outline flex items-center gap-1 rounded-md"
@@ -82,7 +83,7 @@
             </button>
           </div>
           
-          <!-- Inline map display -->
+          <!-- Inline map display - only initialize when shown and has valid data -->
           <div x-show="message.geoJSON && message.showMap" class="mt-2 mb-4">
             <div class="relative rounded-lg shadow-md overflow-hidden" style="height: 400px;">
               <!-- Map container -->
@@ -101,15 +102,19 @@
                 </div>
                 
                 <div class="text-xs">
-                  <span x-show="getMapFeatureCount(message.geoJSON)">
+                  <span x-show="message.geoJSON && getMapFeatureCount(message.geoJSON)">
                     <span x-text="getMapFeatureCount(message.geoJSON)"></span> features
                   </span>
                 </div>
               </div>
             </div>
             
-            <!-- Initialize map when shown -->
-            <div x-init="$nextTick(() => initInlineMap('map-' + index, message.geoJSON))"></div>
+            <!-- Only initialize map when it's first shown -->
+            <div x-show="message.showMap" x-init="$nextTick(() => {
+              if (!inlineMaps['map-' + index]) {
+                initInlineMap('map-' + index, message.geoJSON);
+              }
+            })"></div>
           </div>
         </div>
       </template>

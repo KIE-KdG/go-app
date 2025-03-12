@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 
+	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -225,10 +227,108 @@ func parseWSRequest(msg []byte) (WebSocketRequest, error) {
 	return req, err
 }
 
+// validateGeoJSON checks if the provided data represents valid GeoJSON
+func validateGeoJSON(data []byte) (bool, string) {
+	// First try to parse the JSON
+	var geoJSON map[string]interface{}
+	if err := json.Unmarshal(data, &geoJSON); err != nil {
+		return false, fmt.Sprintf("Invalid JSON: %v", err)
+	}
+	
+	// Check for type field
+	typeVal, hasType := geoJSON["type"]
+	if !hasType {
+		return false, "Missing 'type' property"
+	}
+	
+	geoJSONType, ok := typeVal.(string)
+	if !ok {
+		return false, "'type' property is not a string"
+	}
+	
+	// Validate based on the GeoJSON type
+	switch geoJSONType {
+	case "FeatureCollection":
+		// Check if features exist and it's an array
+		featuresVal, hasFeatures := geoJSON["features"]
+		if !hasFeatures {
+			return false, "FeatureCollection missing 'features' property"
+		}
+		
+		features, ok := featuresVal.([]interface{})
+		if !ok {
+			return false, "FeatureCollection 'features' is not an array"
+		}
+		
+		if len(features) == 0 {
+			return false, "FeatureCollection has empty 'features' array"
+		}
+		
+		return true, fmt.Sprintf("Valid FeatureCollection with %d features", len(features))
+		
+	case "Feature":
+		// Check if geometry exists
+		geometryVal, hasGeometry := geoJSON["geometry"]
+		if !hasGeometry {
+			return false, "Feature missing 'geometry' property"
+		}
+		
+		geometry, ok := geometryVal.(map[string]interface{})
+		if !ok {
+			return false, "Feature 'geometry' is not an object"
+		}
+		
+		geometryType, hasGeometryType := geometry["type"]
+		if !hasGeometryType {
+			return false, "Feature geometry missing 'type' property"
+		}
+		
+		return true, fmt.Sprintf("Valid Feature with geometry type: %v", geometryType)
+		
+	case "Point", "LineString", "Polygon", "MultiPoint", "MultiLineString", "MultiPolygon":
+		// Check if coordinates exist and it's an array
+		coordsVal, hasCoords := geoJSON["coordinates"]
+		if !hasCoords {
+			return false, fmt.Sprintf("%s missing 'coordinates' property", geoJSONType)
+		}
+		
+		_, ok := coordsVal.([]interface{})
+		if !ok {
+			return false, fmt.Sprintf("%s 'coordinates' is not an array", geoJSONType)
+		}
+		
+		return true, fmt.Sprintf("Valid %s geometry", geoJSONType)
+		
+	case "GeometryCollection":
+		// Check if geometries exist and it's an array
+		geometriesVal, hasGeometries := geoJSON["geometries"]
+		if !hasGeometries {
+			return false, "GeometryCollection missing 'geometries' property"
+		}
+		
+		geometries, ok := geometriesVal.([]interface{})
+		if !ok {
+			return false, "GeometryCollection 'geometries' is not an array"
+		}
+		
+		if len(geometries) == 0 {
+			return false, "GeometryCollection has empty 'geometries' array"
+		}
+		
+		return true, fmt.Sprintf("Valid GeometryCollection with %d geometries", len(geometries))
+		
+	default:
+		return false, fmt.Sprintf("Unknown GeoJSON type: %s", geoJSONType)
+	}
+}
+
 // Process the prompt and return a FinalResponse
 func (app *application) processPrompt(prompt string) FinalResponse {
 	var response FinalResponse
 
+	// Log the raw response for debugging
+	app.infoLog.Printf("Raw response from upstream server: %s", prompt)
+	
 	// Try to parse as a combined response (status + response + geo_objects)
 	var combinedResponse struct {
 		Status     string                `json:"status,omitempty"`
@@ -250,19 +350,22 @@ func (app *application) processPrompt(prompt string) FinalResponse {
 				response.GeoObjects = combinedResponse.GeoObjects
 				
 				// Create a simplified single FeatureCollection from geo_objects
-				// The frontend expects a standard GeoJSON FeatureCollection
 				var allFeatures []json.RawMessage
 				
-				// Log the raw GeoObjects for debugging
-				app.infoLog.Printf("Received GeoObjects: %+v", combinedResponse.GeoObjects)
+				// Log the GeoObjects details
+				app.infoLog.Printf("Processing GeoObjects with %d items", len(combinedResponse.GeoObjects))
 				
 				for shapeType, geoObject := range combinedResponse.GeoObjects {
-					// First, ensure we can unmarshal the Features property
+					app.infoLog.Printf("Processing '%s' with type '%s'", shapeType, geoObject.Type)
+					
+					// Ensure we can unmarshal the Features property
 					var features []json.RawMessage
 					if err := json.Unmarshal(geoObject.Features, &features); err != nil {
 						app.errorLog.Printf("Error unmarshaling features for %s: %v", shapeType, err)
 						continue
 					}
+					
+					app.infoLog.Printf("Successfully parsed %d features for '%s'", len(features), shapeType)
 					
 					// Add each feature to our collection
 					for _, feature := range features {
@@ -276,12 +379,26 @@ func (app *application) processPrompt(prompt string) FinalResponse {
 					"features": allFeatures,
 				}
 				
-				// Marshal to JSON for the frontend
-				geoJSONBytes, err := json.Marshal(unifiedGeoJSON)
-				if err == nil {
-					response.GeoJSON = geoJSONBytes
+				// Only proceed if we have actual features
+				if len(allFeatures) > 0 {
+					// Marshal to JSON for validation
+					geoJSONBytes, err := json.Marshal(unifiedGeoJSON)
+					if err != nil {
+						app.errorLog.Printf("Error marshaling unified GeoJSON: %v", err)
+					} else {
+						// Validate the GeoJSON before sending it
+						isValid, message := validateGeoJSON(geoJSONBytes)
+						if isValid {
+							app.infoLog.Printf("GeoJSON validation passed: %s", message)
+							response.GeoJSON = geoJSONBytes
+							app.infoLog.Printf("Created unified GeoJSON with %d features", len(allFeatures))
+						} else {
+							app.errorLog.Printf("GeoJSON validation failed: %s", message)
+							// Don't include invalid GeoJSON in the response
+						}
+					}
 				} else {
-					app.errorLog.Printf("Error marshaling unified GeoJSON: %v", err)
+					app.errorLog.Printf("No valid features found in GeoObjects, not sending GeoJSON to frontend")
 				}
 			}
 			
@@ -311,16 +428,50 @@ func (app *application) processPrompt(prompt string) FinalResponse {
 	if err := json.Unmarshal([]byte(prompt), &geoJsonResp); err == nil && len(geoJsonResp.GeoObjects) > 0 {
 		response.GeoObjects = geoJsonResp.GeoObjects
 		
-		// Convert GeoObjects to JSON for backward compatibility
-		geoJsonBytes, err := json.Marshal(geoJsonResp.GeoObjects)
-		if err == nil {
-			response.GeoJSON = geoJsonBytes
+		// Process GeoObjects into a proper FeatureCollection
+		var allFeatures []json.RawMessage
+		
+		for shapeType, geoObject := range geoJsonResp.GeoObjects {
+			var features []json.RawMessage
+			if err := json.Unmarshal(geoObject.Features, &features); err != nil {
+				app.errorLog.Printf("Error unmarshaling features for %s: %v", shapeType, err)
+				continue
+			}
+			
+			for _, feature := range features {
+				allFeatures = append(allFeatures, feature)
+			}
+		}
+		
+		// Only proceed if we have actual features
+		if len(allFeatures) > 0 {
+			// Create unified FeatureCollection
+			unifiedGeoJSON := map[string]interface{}{
+				"type": "FeatureCollection",
+				"features": allFeatures,
+			}
+			
+			// Marshal to JSON
+			geoJSONBytes, err := json.Marshal(unifiedGeoJSON)
+			if err == nil {
+				// Validate before sending
+				isValid, message := validateGeoJSON(geoJSONBytes)
+				if isValid {
+					app.infoLog.Printf("GeoJSON validation passed: %s", message)
+					response.GeoJSON = geoJSONBytes
+					app.infoLog.Printf("Created unified GeoJSON from ChatGeoJsonResponse with %d features", len(allFeatures))
+				} else {
+					app.errorLog.Printf("GeoJSON validation failed: %s", message)
+				}
+			} else {
+				app.errorLog.Printf("Error marshaling unified GeoJSON: %v", err)
+			}
 		}
 		
 		return response
 	}
 
-	// Fallback: if the prompt looks like a GeoJSON object directly
+	// Fallback: if the prompt looks like a direct GeoJSON object
 	var geoJSONResponse map[string]interface{}
 	if err := json.Unmarshal([]byte(prompt), &geoJSONResponse); err == nil {
 		if geoJSONType, ok := geoJSONResponse["type"].(string); ok {
@@ -328,8 +479,16 @@ func (app *application) processPrompt(prompt string) FinalResponse {
 			   geoJSONType == "Point" || geoJSONType == "LineString" || geoJSONType == "Polygon" ||
 			   geoJSONType == "MultiPoint" || geoJSONType == "MultiLineString" || geoJSONType == "MultiPolygon" || 
 			   geoJSONType == "GeometryCollection" {
-				response.GeoJSON = []byte(prompt)
-				return response
+				
+				// Validate before sending
+				isValid, message := validateGeoJSON([]byte(prompt))
+				if isValid {
+					app.infoLog.Printf("Direct GeoJSON validation passed: %s", message)
+					response.GeoJSON = []byte(prompt)
+					return response
+				} else {
+					app.errorLog.Printf("Direct GeoJSON validation failed: %s", message)
+				}
 			}
 		}
 	}
@@ -338,3 +497,11 @@ func (app *application) processPrompt(prompt string) FinalResponse {
 	return FinalResponse{Status: prompt}
 }
 
+// sendWSJSON is a helper function to send JSON over WebSocket
+func sendWSJSON(ws *websocket.Conn, v interface{}) error {
+	jsonBytes, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	return ws.WriteMessage(websocket.TextMessage, jsonBytes)
+}

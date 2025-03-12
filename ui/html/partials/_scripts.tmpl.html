@@ -23,57 +23,68 @@
       showScrollButton: false,
       responseStartTime: null,
       hasMap: false,
-      mapVisible: true,
+      mapVisible: false, // Start with map hidden
       isFullscreenMapOpen: false,
       fullscreenMapData: null,
       fullscreenMapIndex: null,
       inlineMaps: {}, // Store references to inline maps
       mapTileLayers: {}, // Store tile layers for each map
-
+      
       init() {
         this.connectWebSocket();
         this.$nextTick(() => {
           this.scrollToBottom();
           this.autoResizeTextarea();
         });
-
+        
         // Handle ESC key to close fullscreen map
         window.addEventListener('keydown', (e) => {
           if (e.key === 'Escape' && this.isFullscreenMapOpen) {
             this.closeFullscreenMap();
           }
         });
-
+        
         // Add resize event listener
         window.addEventListener('resize', () => {
           this.refreshAllMaps();
         });
       },
-
+      
       // Toggle map visibility for a specific message
       toggleMapForMessage(index) {
-        if (!this.messages[index] || !this.messages[index].geoJSON) return;
-
-        // Toggle the showMap property
-        this.messages[index].showMap = !this.messages[index].showMap;
-
-        // Initialize map if needed
-        if (this.messages[index].showMap) {
-          this.$nextTick(() => {
-            this.initInlineMap('map-' + index, this.messages[index].geoJSON);
-          });
+        if (!this.messages[index]) return;
+        
+        // Only toggle if we actually have GeoJSON data
+        if (this.messages[index].geoJSON) {
+          console.log("Toggling map for message", index);
+          
+          // Toggle the showMap property
+          this.messages[index].showMap = !this.messages[index].showMap;
+          
+          // Initialize map when showing it for the first time
+          if (this.messages[index].showMap) {
+            this.$nextTick(() => {
+              this.initInlineMap('map-' + index, this.messages[index].geoJSON);
+            });
+          } else {
+            console.log("Hiding map for message", index);
+          }
+        } else {
+          console.warn("Cannot toggle map - no GeoJSON data for message", index);
         }
       },
-
+      
       // Initialize an inline map within a message
       initInlineMap(containerId, geoJSON) {
+        console.log("Initializing map:", containerId);
+        
         setTimeout(() => {
           const container = document.getElementById(containerId);
           if (!container) {
             console.error("Map container not found:", containerId);
             return;
           }
-
+          
           try {
             // If map already initialized, don't reinitialize
             if (this.inlineMaps[containerId]) {
@@ -81,21 +92,21 @@
               this.inlineMaps[containerId].invalidateSize();
               return;
             }
-
-            console.log("Initializing inline map:", containerId);
-
-            // Create new map
+            
+            console.log("Creating new map:", containerId);
+            
+            // Create new map with default view
             const map = L.map(containerId, {
               center: [51.05, 3.7], // Default to Belgium
               zoom: 10,
               zoomControl: true,
               attributionControl: true
             });
-
+            
             // Save reference
             this.inlineMaps[containerId] = map;
             this.mapTileLayers[containerId] = {};
-
+            
             // Setup base maps
             this.mapTileLayers[containerId] = {
               osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -108,13 +119,17 @@
                 attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://opentopomap.org">OpenTopoMap</a>'
               })
             };
-
+            
             // Add default basemap
             this.mapTileLayers[containerId].osm.addTo(map);
-
-            // Add GeoJSON data
-            this.addGeoJSONToMap(map, geoJSON);
-
+            
+            // If we have GeoJSON data, add it to the map
+            if (geoJSON) {
+              this.addGeoJSONToMap(map, geoJSON);
+            } else {
+              console.warn("No GeoJSON data provided for map:", containerId);
+            }
+            
             // Force a size refresh
             setTimeout(() => {
               map.invalidateSize();
@@ -124,13 +139,13 @@
           }
         }, 100);
       },
-
+      
       // Open the fullscreen map modal
       openMapFullscreen(geoJSON, index) {
         this.fullscreenMapData = geoJSON;
         this.fullscreenMapIndex = index;
         this.isFullscreenMapOpen = true;
-
+        
         // Initialize the fullscreen map after the modal is shown
         this.$nextTick(() => {
           setTimeout(() => {
@@ -138,19 +153,19 @@
           }, 300);
         });
       },
-
+      
       // Close the fullscreen map modal
       closeFullscreenMap() {
         this.isFullscreenMapOpen = false;
         this.fullscreenMapData = null;
         this.fullscreenMapIndex = null;
       },
-
+      
       // Initialize the fullscreen map
       initFullscreenMap() {
         const container = document.getElementById('fullscreen-map');
         if (!container || !this.fullscreenMapData) return;
-
+        
         try {
           // Check if map already exists
           if (this.inlineMaps['fullscreen-map']) {
@@ -158,7 +173,7 @@
             this.inlineMaps['fullscreen-map'].remove();
             delete this.inlineMaps['fullscreen-map'];
           }
-
+          
           // Create new map
           const map = L.map('fullscreen-map', {
             center: [51.05, 3.7],
@@ -166,11 +181,11 @@
             zoomControl: true,
             attributionControl: true
           });
-
+          
           // Save reference
           this.inlineMaps['fullscreen-map'] = map;
           this.mapTileLayers['fullscreen-map'] = {};
-
+          
           // Setup base maps
           this.mapTileLayers['fullscreen-map'] = {
             osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -183,13 +198,13 @@
               attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://opentopomap.org">OpenTopoMap</a>'
             })
           };
-
+          
           // Add default basemap
           this.mapTileLayers['fullscreen-map'].osm.addTo(map);
-
+          
           // Add GeoJSON data
           this.addGeoJSONToMap(map, this.fullscreenMapData);
-
+          
           // Force a size refresh
           setTimeout(() => {
             map.invalidateSize();
@@ -198,36 +213,44 @@
           console.error("Error initializing fullscreen map:", e);
         }
       },
-
+      
       // Change map style for a specific map
       changeMapStyle(style, mapId) {
         if (!this.inlineMaps[mapId] || !this.mapTileLayers[mapId]) return;
-
+        
         const map = this.inlineMaps[mapId];
         const tileLayers = this.mapTileLayers[mapId];
-
+        
         // Remove all base layers
         Object.values(tileLayers).forEach(layer => {
           if (map.hasLayer(layer)) {
             map.removeLayer(layer);
           }
         });
-
+        
         // Add selected base layer
         if (tileLayers[style]) {
           tileLayers[style].addTo(map);
         }
       },
-
-      // Add GeoJSON to a map with error handling
-      // Modify the addGeoJSONToMap function in _scripts.tmpl.html 
-      // to handle the case where isEmpty is not available
-
+      
+      // Add GeoJSON to a map with robust error handling
       addGeoJSONToMap(map, geoJSONData) {
         try {
+          // Validate input
+          if (!map) {
+            console.error("No map provided to addGeoJSONToMap");
+            return;
+          }
+          
+          if (!geoJSONData) {
+            console.error("Invalid GeoJSON data:", geoJSONData);
+            return;
+          }
+          
           // Convert to proper format if needed
           let geoJSON = geoJSONData;
-
+          
           // If it's a string, parse it
           if (typeof geoJSONData === 'string') {
             try {
@@ -237,14 +260,46 @@
               return;
             }
           }
-
-          // Validate GeoJSON data
+          
+          // Validate the GeoJSON structure
           if (!geoJSON || !geoJSON.type) {
             console.error("Invalid GeoJSON data:", geoJSON);
-            map.setView([51.05, 3.7], 10);
             return;
           }
-
+          
+          // Handle FeatureCollection vs single Feature
+          if (geoJSON.type !== 'FeatureCollection' && geoJSON.type !== 'Feature') {
+            // If it's a geometry, wrap it in a Feature
+            geoJSON = {
+              type: 'Feature',
+              geometry: geoJSON,
+              properties: {}
+            };
+          }
+          
+          // If it's a Feature, wrap it in a FeatureCollection
+          if (geoJSON.type === 'Feature') {
+            geoJSON = {
+              type: 'FeatureCollection',
+              features: [geoJSON]
+            };
+          }
+          
+          // Ensure we have features array for FeatureCollection
+          if (geoJSON.type === 'FeatureCollection' && (!geoJSON.features || !Array.isArray(geoJSON.features))) {
+            console.error("Invalid FeatureCollection: missing or invalid features array", geoJSON);
+            return;
+          }
+          
+          // Skip if no features
+          if (geoJSON.type === 'FeatureCollection' && geoJSON.features.length === 0) {
+            console.warn("Empty FeatureCollection: no features to display");
+            return;
+          }
+          
+          console.log("Processing GeoJSON:", geoJSON.type, 
+                    geoJSON.features ? `with ${geoJSON.features.length} features` : '');
+          
           // Create options for GeoJSON layer
           const geoJsonOptions = {
             style: (feature) => {
@@ -274,40 +329,68 @@
                 const popupContent = Object.entries(feature.properties)
                   .map(([key, value]) => `<strong>${key}:</strong> ${value}`)
                   .join('<br>');
-
+                
                 if (popupContent) {
                   layer.bindPopup(popupContent);
                 }
               }
             }
           };
-
+          
           // Create and add the GeoJSON layer
           const geoLayer = L.geoJSON(geoJSON, geoJsonOptions).addTo(map);
-
+          console.log("Added GeoJSON layer to map");
+          
           // Try to fit bounds if possible with more robust error handling
           try {
-            if (geoLayer.getBounds) {
-              const bounds = geoLayer.getBounds();
-
-              // Check if bounds method exists and is not empty
-              // Some versions of Leaflet use isValid() instead of isEmpty()
-              if (bounds) {
-                if (typeof bounds.isValid === 'function' && bounds.isValid()) {
-                  map.fitBounds(bounds, { padding: [30, 30] });
-                } else if (typeof bounds.isEmpty === 'function' && !bounds.isEmpty()) {
-                  map.fitBounds(bounds, { padding: [30, 30] });
+            // Check if the layer has any actual features
+            if (geoLayer && typeof geoLayer.getLayers === 'function') {
+              const layers = geoLayer.getLayers();
+              if (layers.length === 0) {
+                console.warn("GeoJSON layer has no renderable features");
+                return;
+              }
+            }
+            
+            if (geoLayer && typeof geoLayer.getBounds === 'function') {
+              try {
+                const bounds = geoLayer.getBounds();
+                
+                // Check if bounds exists and is valid
+                if (bounds) {
+                  // Different Leaflet versions use different methods, try them all
+                  let isValid = true;
+                  
+                  if (typeof bounds.isValid === 'function') {
+                    isValid = bounds.isValid();
+                  } else if (typeof bounds.isEmpty === 'function') {
+                    isValid = !bounds.isEmpty();
+                  } else if (bounds.getNorth && bounds.getSouth && bounds.getEast && bounds.getWest) {
+                    // If no validation methods, check if bounds are not null/undefined/NaN
+                    const n = bounds.getNorth();
+                    const s = bounds.getSouth();
+                    const e = bounds.getEast();
+                    const w = bounds.getWest();
+                    isValid = !isNaN(n) && !isNaN(s) && !isNaN(e) && !isNaN(w);
+                  }
+                  
+                  if (isValid) {
+                    console.log("Fitting map to bounds:", bounds);
+                    map.fitBounds(bounds, { padding: [30, 30] });
+                  } else {
+                    console.warn("Invalid bounds, using default view");
+                    map.setView([51.05, 3.7], 10);
+                  }
                 } else {
-                  // Default view if we can't determine if bounds are valid
-                  console.log("Could not validate bounds, using default view");
+                  console.warn("Empty bounds, using default view");
                   map.setView([51.05, 3.7], 10);
                 }
-              } else {
-                console.log("Bounds object is undefined, using default view");
+              } catch (e) {
+                console.warn("Error getting bounds:", e);
                 map.setView([51.05, 3.7], 10);
               }
             } else {
-              console.log("No getBounds method on geoLayer, using default view");
+              console.warn("GeoJSON layer has no getBounds method");
               map.setView([51.05, 3.7], 10);
             }
           } catch (e) {
@@ -321,16 +404,17 @@
           }
         }
       },
+      
       // Get feature count from GeoJSON
       getMapFeatureCount(geoJSON) {
         if (!geoJSON) return 0;
-
+        
         try {
           let data = geoJSON;
           if (typeof geoJSON === 'string') {
             data = JSON.parse(geoJSON);
           }
-
+          
           if (data.features && Array.isArray(data.features)) {
             return data.features.length;
           } else if (data.type === 'Feature') {
@@ -339,15 +423,15 @@
         } catch (e) {
           console.error("Error counting features:", e);
         }
-
+        
         return 0;
       },
-
+      
       // Get color for feature based on properties
       getColorForFeature(feature) {
         // This is a simple example - customize as needed
         if (!feature.properties) return '#3388ff';
-
+        
         // If it has a type or status property, use different colors
         if (feature.properties.type) {
           const type = feature.properties.type.toLowerCase();
@@ -359,7 +443,7 @@
             return '#CD5C5C';
           }
         }
-
+        
         if (feature.properties.status) {
           const status = feature.properties.status.toLowerCase();
           if (status.includes('occupied')) {
@@ -370,7 +454,7 @@
             return '#FFFF33';
           }
         }
-
+        
         if (feature.properties.shapeType) {
           const shapeType = feature.properties.shapeType;
           if (shapeType.includes('Point')) {
@@ -381,10 +465,10 @@
             return '#33CC33';
           }
         }
-
+        
         return '#3388ff'; // Default blue
       },
-
+      
       // Refresh all maps when needed
       refreshAllMaps() {
         // Timeout to ensure the DOM has updated
@@ -396,7 +480,7 @@
           });
         }, 300);
       },
-
+      
       // Method to interrupt the generation
       interruptGeneration() {
         if (this.ws && this.ws.readyState === WebSocket.OPEN && this.isProcessing) {
@@ -404,71 +488,72 @@
           this.ws.send(JSON.stringify({
             interrupt: true
           }));
-
+          
           // Update the current response to show it was interrupted
           if (this.currentResponse) {
             this.currentResponse.statusUpdates.push("Generation interrupted by user.");
-
+            
             // Finalize the current response even if incomplete
             if (this.responseStartTime) {
               const responseTime = new Date() - this.responseStartTime;
               this.currentResponse.responseTime = this.formatResponseTime(responseTime) + " (interrupted)";
               this.responseStartTime = null;
             }
-
+            
             // If there's no answer yet, add a message indicating interruption
             if (!this.currentResponse.answer) {
               this.currentResponse.answer = "*Generation was interrupted.*";
             }
-
+            
             this.currentResponse = null;
           }
-
+          
           // Reset processing state immediately
           this.isProcessing = false;
         }
       },
-
+  
       connectWebSocket() {
         const chatID = window.location.pathname.split("/")[2];
         this.ws = new WebSocket(`wss://localhost:4000/ws/${chatID}`);
-
+      
         this.ws.addEventListener('open', () => {
           console.log('WebSocket connection established');
           this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
         });
-
+      
         this.ws.addEventListener('message', (event) => {
           let data = {};
           try {
             data = JSON.parse(event.data);
+            console.log("Received WebSocket data:", data);
           } catch (e) {
-            console.error('Error parsing JSON:', event.data);
+            console.error('Error parsing JSON:', event.data, e);
             return;
           }
-
+      
           // Handle possible interruption acknowledgment
           if (data.interrupted) {
             console.log("Server acknowledged interruption");
             this.isProcessing = false;
-
+            
             if (this.currentResponse) {
               if (!this.currentResponse.answer) {
                 this.currentResponse.answer = "*Generation was interrupted.*";
               }
-
+              
               if (this.responseStartTime) {
                 const responseTime = new Date() - this.responseStartTime;
                 this.currentResponse.responseTime = this.formatResponseTime(responseTime) + " (interrupted)";
                 this.responseStartTime = null;
               }
-
+              
               this.currentResponse = null;
             }
-
+            
             return;
           }
-
+      
           // Create response object if it doesn't exist yet
           if (!this.currentResponse) {
             this.messages.push({
@@ -480,23 +565,25 @@
             });
             this.currentResponse = this.messages[this.messages.length - 1];
           }
-
+      
           // Handle status updates
           if (data.status) {
             this.currentResponse.statusUpdates.push(data.status.trim());
           }
-
+      
           // Handle answer data (look for both answer and response fields)
           if (data.answer || data.response) {
             const responseText = data.answer || data.response;
             this.currentResponse.answer = responseText;
           }
-
-          // Handle GeoJSON data
+      
+          // Handle GeoJSON data with strict validation
           if (data.geoJSON) {
-            console.log("Received GeoJSON data");
-
-            let parsedGeoJSON = data.geoJSON;
+            console.log("Received GeoJSON data type:", typeof data.geoJSON);
+            
+            let parsedGeoJSON = null;
+            let isValidGeoJSON = false;
+            
             // If it's a string, parse it
             if (typeof data.geoJSON === 'string') {
               try {
@@ -505,16 +592,64 @@
               } catch (e) {
                 console.error("Failed to parse GeoJSON string:", e);
               }
+            } else if (typeof data.geoJSON === 'object' && data.geoJSON !== null) {
+              // If it's already an object, use it directly
+              parsedGeoJSON = data.geoJSON;
+              console.log("Using GeoJSON object directly");
             }
-
-            // Store the GeoJSON in the current response
-            this.currentResponse.geoJSON = parsedGeoJSON;
-            this.currentResponse.showMap = false; // Start with map hidden
-
-            // Set flag indicating maps are available
-            this.hasMap = true;
+            
+            // Strict validation of the GeoJSON
+            if (parsedGeoJSON && parsedGeoJSON.type) {
+              // For FeatureCollection, ensure it has features
+              if (parsedGeoJSON.type === 'FeatureCollection') {
+                if (parsedGeoJSON.features && Array.isArray(parsedGeoJSON.features) && parsedGeoJSON.features.length > 0) {
+                  isValidGeoJSON = true;
+                  console.log("Valid FeatureCollection with", parsedGeoJSON.features.length, "features");
+                } else {
+                  console.error("Invalid FeatureCollection: missing or empty features array");
+                }
+              } 
+              // For Feature, ensure it has geometry
+              else if (parsedGeoJSON.type === 'Feature') {
+                if (parsedGeoJSON.geometry && parsedGeoJSON.geometry.type) {
+                  isValidGeoJSON = true;
+                  console.log("Valid Feature with geometry type:", parsedGeoJSON.geometry.type);
+                } else {
+                  console.error("Invalid Feature: missing or invalid geometry");
+                }
+              }
+              // For direct geometry types
+              else if (['Point', 'LineString', 'Polygon', 'MultiPoint', 'MultiLineString', 'MultiPolygon', 'GeometryCollection'].includes(parsedGeoJSON.type)) {
+                if ((parsedGeoJSON.coordinates && Array.isArray(parsedGeoJSON.coordinates)) || 
+                    (parsedGeoJSON.type === 'GeometryCollection' && parsedGeoJSON.geometries)) {
+                  isValidGeoJSON = true;
+                  console.log("Valid geometry of type:", parsedGeoJSON.type);
+                } else {
+                  console.error("Invalid geometry: missing coordinates or geometries");
+                }
+              } else {
+                console.error("Unknown GeoJSON type:", parsedGeoJSON.type);
+              }
+            } else {
+              console.error("Invalid GeoJSON structure:", parsedGeoJSON);
+            }
+            
+            // Only store and flag valid GeoJSON
+            if (isValidGeoJSON) {
+              // Store the GeoJSON in the current response
+              this.currentResponse.geoJSON = parsedGeoJSON;
+              this.currentResponse.showMap = false; // Default to hidden map initially
+              
+              // Set flag indicating maps are available
+              this.hasMap = true;
+              console.log("Valid GeoJSON stored in message, map button will be shown");
+            } else {
+              console.error("GeoJSON validation failed, not storing or displaying map");
+              // Make sure we don't have invalid GeoJSON stored
+              this.currentResponse.geoJSON = null;
+            }
           }
-
+      
           // Finalize the response if we have answer or GeoJSON
           if (data.answer || data.response || data.geoJSON) {
             // Calculate response time
@@ -523,57 +658,57 @@
               this.currentResponse.responseTime = this.formatResponseTime(responseTime);
               this.responseStartTime = null;
             }
-
+            
             this.currentResponse = null;
             this.isProcessing = false;
           }
-
+      
           this.$nextTick(() => {
             this.scrollToBottom();
           });
         });
-
+      
         this.ws.addEventListener('close', (event) => {
           console.log('WebSocket connection closed', event);
-
+      
           // If we were in the middle of a response, mark it as incomplete
           if (this.isProcessing) {
             if (this.currentResponse) {
               this.currentResponse.statusUpdates.push("Connection closed unexpectedly. Please try again.");
               this.currentResponse.answer = this.currentResponse.answer || "Response interrupted. Please try again.";
-
+      
               // Add response time even for incomplete responses
               if (this.responseStartTime) {
                 const responseTime = new Date() - this.responseStartTime;
                 this.currentResponse.responseTime = this.formatResponseTime(responseTime) + " (incomplete)";
                 this.responseStartTime = null;
               }
-
+      
               this.currentResponse = null;
             }
             this.isProcessing = false;
           }
-
+      
           // Attempt to reconnect if not a normal closure and within max attempts
           if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
             const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), 10000);
             console.log(`Attempting to reconnect in ${delay}ms...`);
-
+      
             this.reconnectTimeout = setTimeout(() => {
               this.reconnectAttempts++;
               this.connectWebSocket();
             }, delay);
           }
         });
-
+      
         this.ws.addEventListener('error', (error) => {
           console.error('WebSocket error:', error);
         });
       },
-
+      
       sendMessage() {
         if (!this.inputMessage.trim() || this.isProcessing) return;
-
+  
         // Check WebSocket state
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
           console.error('WebSocket is not open');
@@ -584,44 +719,45 @@
           this.connectWebSocket();
           return;
         }
-
+  
         this.isProcessing = true; // Disable input form while processing
         this.responseStartTime = new Date(); // Start timing the response
-
+  
         this.messages.push({
           sender: 'You',
           text: this.inputMessage
         });
-
+  
         this.messages.push({
           sender: 'AI',
           statusUpdates: [],
           answer: '',
-          geoJSON: null
+          geoJSON: null,
+          showMap: false
         });
-
+  
         this.currentResponse = this.messages[this.messages.length - 1];
-
+  
         this.ws.send(JSON.stringify({
           message: this.inputMessage,
           dbUsed: this.dbUsed,
           docsUsed: this.docsUsed
         }));
-
+  
         this.inputMessage = '';
         this.$nextTick(() => {
           this.scrollToBottom();
           this.autoResizeTextarea();
         });
       },
-
+  
       scrollToBottom() {
         const chatMessages = document.getElementById('chatMessages');
         if (chatMessages) {
           chatMessages.scrollTop = chatMessages.scrollHeight;
         }
       },
-
+  
       checkScroll() {
         const chatMessages = document.getElementById('chatMessages');
         if (chatMessages) {
@@ -629,7 +765,7 @@
           this.showScrollButton = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight > 200;
         }
       },
-
+  
       formatResponseTime(milliseconds) {
         if (milliseconds < 1000) {
           return `${milliseconds}ms`;
@@ -641,7 +777,7 @@
           return `${minutes}m ${seconds}s`;
         }
       },
-
+  
       formatMarkdown(text) {
         if (!text) return '';
         // Make sure marked is loaded
@@ -655,13 +791,13 @@
         }
         return text; // Fallback if marked.js isn't loaded yet
       },
-
+  
       autoResizeTextarea() {
         const textarea = this.$refs.messageInput;
         if (textarea) {
           // Reset height to get proper scrollHeight
           textarea.style.height = 'auto';
-
+  
           // Set new height (with min/max constraints handled by CSS)
           const newHeight = Math.min(Math.max(textarea.scrollHeight, 60), 200);
           textarea.style.height = `${newHeight}px`;
