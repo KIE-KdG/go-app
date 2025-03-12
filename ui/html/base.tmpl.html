@@ -6,8 +6,64 @@
   <meta charset="UTF-8">
   <title>{{template "title" .}} - LLM Chat</title>
   <link rel="shortcut icon" href="/static/img/favicon.ico" type="image/x-icon">
+  
+  <!-- Preload critical CSS to prevent FOUC -->
+  <style>
+    /* Loading screen styles */
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: var(--b1, #ffffff);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: opacity 0.5s ease-out;
+    }
+    
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 5px solid #ddd;
+      border-bottom-color: transparent;
+      border-radius: 50%;
+      animation: spinner 1s linear infinite;
+    }
+    
+    @keyframes spinner {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    /* Hide Alpine elements until initialized */
+    [x-cloak] { display: none !important; }
+    
+    /* Hide scroll button until needed */
+    .scroll-button {
+      display: none !important;
+    }
+  </style>
+  
+  <!-- Main CSS -->
   <link href="/static/css/output.css" rel="stylesheet">
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+        crossorigin="" />
+  
+  <!-- Preload scripts to improve loading time -->
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" as="script">
+  <link rel="preload" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" as="script">
+  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.4/marked.min.js" as="script">
+  
+  <!-- Load scripts with defer -->
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/theme-change@2.0.2/index.js"></script>
 
   <!-- Apply saved theme from localStorage on page load -->
@@ -17,10 +73,97 @@
       document.documentElement.setAttribute('data-theme', savedTheme);
     })();
   </script>
+  
+  <!-- Loading screen script -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Show loading screen
+      const loadingScreen = document.getElementById('loading-screen');
+      
+      // Check if all required scripts are loaded
+      let alpineLoaded = false;
+      let leafletLoaded = false;
+      let markedLoaded = false;
+      
+      // Check Alpine.js loaded
+      const checkAlpine = setInterval(function() {
+        if (window.Alpine) {
+          alpineLoaded = true;
+          clearInterval(checkAlpine);
+          checkAllLoaded();
+        }
+      }, 100);
+      
+      // Check Leaflet loaded
+      const checkLeaflet = setInterval(function() {
+        if (window.L) {
+          leafletLoaded = true;
+          clearInterval(checkLeaflet);
+          checkAllLoaded();
+        }
+      }, 100);
+      
+      // Check marked.js loaded (if needed)
+      const checkMarked = setInterval(function() {
+        if (window.marked) {
+          markedLoaded = true;
+          clearInterval(checkMarked);
+          checkAllLoaded();
+        } else {
+          // Try to load it if not already loading
+          if (!window.markedLoading) {
+            window.markedLoading = true;
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.4/marked.min.js';
+            script.onload = function() {
+              markedLoaded = true;
+              checkAllLoaded();
+            };
+            document.head.appendChild(script);
+          }
+        }
+      }, 100);
+      
+      // Check if all dependencies are loaded
+      function checkAllLoaded() {
+        if (alpineLoaded && leafletLoaded && markedLoaded) {
+          // Fade out loading screen
+          if (loadingScreen) {
+            loadingScreen.style.opacity = '0';
+            setTimeout(function() {
+              loadingScreen.style.display = 'none';
+            }, 500);
+          }
+          
+          // Add event listener for Alpine initialization
+          document.addEventListener('alpine:initialized', function() {
+            console.log('Alpine initialized');
+          });
+        }
+      }
+      
+      // Timeout to hide loading screen after 5 seconds even if scripts don't load
+      setTimeout(function() {
+        if (loadingScreen) {
+          loadingScreen.style.opacity = '0';
+          setTimeout(function() {
+            loadingScreen.style.display = 'none';
+          }, 500);
+        }
+      }, 5000);
+    });
+  </script>
+  
   {{block "head" .}}{{end}}
 </head>
 
 <body class="min-h-screen">
+  <!-- Loading screen -->
+  <div id="loading-screen">
+    <div class="loading-spinner mb-4"></div>
+    <p>Loading chat interface...</p>
+  </div>
+
   <!-- Only show drawer to authenticated users -->
   {{if .IsAuthenticated}}
   <div class="drawer">

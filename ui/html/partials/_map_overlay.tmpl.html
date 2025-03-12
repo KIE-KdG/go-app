@@ -1,0 +1,88 @@
+{{define "map_overlay"}}
+<!-- Map overlay (fixed position covering most of the screen) -->
+<div x-show="mapOverlayVisible" 
+     x-cloak
+     class="map-overlay fixed inset-0 z-40 bg-black bg-opacity-50 flex items-center justify-center p-4"
+     x-transition:enter="transition ease-out duration-300"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     x-transition:leave="transition ease-in duration-200"
+     x-transition:leave-start="opacity-100"
+     x-transition:leave-end="opacity-0">
+  
+  <!-- Map container -->
+  <div class="bg-base-100 dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-5xl h-[80vh] flex flex-col">
+    <!-- Map header -->
+    <div class="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+      <h3 class="text-lg font-bold flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+          <polyline points="21 15 16 10 5 21"></polyline>
+        </svg>
+        GeoJSON Visualization
+      </h3>
+      
+      <div class="flex items-center gap-2">
+        <!-- Fullscreen button -->
+        <button @click="toggleFullscreen()" class="btn btn-sm btn-ghost p-1">
+          <svg x-show="!isFullscreen" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <polyline points="9 21 3 21 3 15"></polyline>
+            <line x1="21" y1="3" x2="14" y2="10"></line>
+            <line x1="3" y1="21" x2="10" y2="14"></line>
+          </svg>
+          <svg x-show="isFullscreen" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 14 10 14 10 20"></polyline>
+            <polyline points="20 10 14 10 14 4"></polyline>
+            <line x1="14" y1="10" x2="21" y2="3"></line>
+            <line x1="3" y1="21" x2="10" y2="14"></line>
+          </svg>
+        </button>
+        
+        <!-- Close button -->
+        <button @click="closeMapOverlay()" class="btn btn-sm btn-ghost p-1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    
+    <!-- Feature count and info -->
+    <div class="px-3 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <!-- Feature count badge -->
+        <div class="badge badge-primary" x-text="getFeatureCount(currentGeoJSON) + ' features'"></div>
+      </div>
+      
+      <!-- Base map selector -->
+      <div class="flex items-center gap-2">
+        <label class="text-sm font-medium">Map Style:</label>
+        <select @change="changeMapStyle($event.target.value, 'overlay')" 
+                class="select select-sm select-bordered rounded">
+          <option value="osm">OpenStreetMap</option>
+          <option value="satellite">Satellite</option>
+          <option value="topo">Topographic</option>
+        </select>
+      </div>
+    </div>
+    
+    <!-- Map visualization -->
+    <div class="flex-1 relative">
+      <div id="overlay-map" class="absolute inset-0"></div>
+    </div>
+    
+    <!-- Map controls -->
+    <div class="p-3 border-t border-gray-200 dark:border-gray-700 flex justify-end items-center">
+      <button @click="resetMapView('overlay')" class="btn btn-sm mr-2">Reset View</button>
+      <button @click="closeMapOverlay()" class="btn btn-sm btn-primary">Close</button>
+    </div>
+  </div>
+</div>
+{{end}}

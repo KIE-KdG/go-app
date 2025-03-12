@@ -26,7 +26,7 @@ type application struct {
 	errorLog       *log.Logger
 	infoLog        *log.Logger
 	models         *model.Models
-	chatPort       *model.ChatPort
+	chatURL        *model.ChatURL
 	geoData        *models.GeoData
 	users          *models.UserModel
 	chats          *models.ChatModel
@@ -42,6 +42,7 @@ func main() {
 	ollama := flag.String("ollama", "llama3", "Ollama model to use")
 	dsn := flag.String("dsn", "data/sqlite_lab.db", "sqlite data source name")
 	chatPort := flag.String("chatPort", ":8000", "Chat server network address")
+	chatLink := flag.String("chatLink", "/chat", "the url after /ws, add /")
 	flag.Parse()
 
 	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
@@ -74,7 +75,7 @@ func main() {
 		errorLog:       errorLog,
 		infoLog:        infoLog,
 		models:         &model.Models{Model: *ollama},
-		chatPort:       &model.ChatPort{Port: *chatPort},
+		chatURL:        &model.ChatURL{Port: *chatPort, Link: *chatLink},
 		geoData:        &models.GeoData{},
 		users:          &models.UserModel{DB: db},
 		chats:          &models.ChatModel{DB: db},
@@ -103,6 +104,7 @@ func main() {
 	infoLog.Printf("Using ollama model: %s", *ollama)
 	infoLog.Printf("Using sqlite database: %s", *dsn)
 	infoLog.Printf("Starting chat server on %s", *chatPort)
+	infoLog.Printf("Starting chat with suffix url on %s", *chatLink)
 	err = srv.ListenAndServeTLS("./tls/cert.pem", "./tls/key.pem")
 	errorLog.Fatal(err)
 }

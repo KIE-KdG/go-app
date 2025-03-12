@@ -16,7 +16,6 @@ type application struct {
 	infoLog  *log.Logger
 	db       *db.DB
 	models   *model.Models
-	chatPort *model.ChatPort
 	geoData  *models.GeoData
 	users    *models.UserModel
 	projects *models.ProjectModel
