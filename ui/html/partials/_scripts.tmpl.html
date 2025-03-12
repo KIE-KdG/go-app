@@ -213,7 +213,9 @@
         }
         
         this.currentGeoJSON = geoJSON;
+        console.log("Setting mapOverlayVisible to true");
         this.mapOverlayVisible = true;
+        console.log("mapOverlayVisible is now:", this.mapOverlayVisible);
         
         // Initialize the map after the overlay is visible
         this.$nextTick(() => {

@@ -181,7 +181,7 @@
 
 /* Map overlay and container styles */
 .map-overlay {
-  overflow: hidden;
+  z-index: 1000 !important;
 }
 
 #overlay-map {
@@ -331,5 +331,6 @@
   [x-cloak] {
     display: none !important;
   }
+
 </style>
 {{end}}
