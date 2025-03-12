@@ -32,7 +32,7 @@ func (c *ChatPort) ForwardMessageWithStream(
 	userID string,
 	chatID string,
 ) (<-chan string, error) {
-	otherServer := "ws://localhost" + c.Port + "/ws/documents/search"
+	otherServer := "ws://localhost" + c.Port + "/ws/chat"
 	conn, _, err := websocket.DefaultDialer.Dial(otherServer, nil)
 	if err != nil {
 		return nil, err
