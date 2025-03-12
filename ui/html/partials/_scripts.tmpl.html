@@ -1,13 +1,5 @@
 {{define "scripts"}}
 <script>
-  // Load marked.js for Markdown rendering
-  if (!window.marked) {
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.4/marked.min.js';
-    script.async = true;
-    document.head.appendChild(script);
-  }
-
   function chatApp() {
     return {
       ws: null,
@@ -23,16 +15,11 @@
       showScrollButton: false,
       responseStartTime: null,
       hasMap: false,
-      mapVisible: false,
-      isFullscreenMapOpen: false,
-      sideMap: null,
-      fullscreenMap: null,
-      currentMapData: null,
-      fullscreenMapData: null,
-      mapTileLayers: {
-        side: {},
-        fullscreen: {}
-      },
+      mapOverlayVisible: false,
+      isFullscreen: false,
+      currentGeoJSON: null,
+      overlayMap: null,
+      mapStyles: {},
       
       init() {
         this.connectWebSocket();
@@ -41,198 +28,184 @@
           this.autoResizeTextarea();
         });
         
-        // Handle ESC key to close fullscreen map
+        // Handle escape key for closing map overlay
         window.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape' && this.isFullscreenMapOpen) {
-            this.closeFullscreenMap();
+          if (e.key === 'Escape' && this.mapOverlayVisible) {
+            this.closeMapOverlay();
           }
         });
         
-        // Add resize event listener
+        // Handle fullscreen changes
+        document.addEventListener('fullscreenchange', () => {
+          this.isFullscreen = !!document.fullscreenElement;
+        });
+        
+        // Handle window resize
         window.addEventListener('resize', () => {
-          this.refreshMaps();
+          if (this.overlayMap && this.mapOverlayVisible) {
+            setTimeout(() => {
+              this.overlayMap.invalidateSize();
+            }, 200);
+          }
         });
       },
       
-      // Show map from a specific message
-      showMapFromMessage(geoJSON) {
-        this.currentMapData = geoJSON;
-        this.mapVisible = true;
+      // Open map overlay with the given GeoJSON data
+      openMapOverlay(geoJSON) {
+        this.currentGeoJSON = geoJSON;
+        this.mapOverlayVisible = true;
         
-        // Initialize the side map after a short delay
+        // Initialize the map after the overlay is visible
         this.$nextTick(() => {
           setTimeout(() => {
-            this.initSideMap();
+            this.initOverlayMap();
           }, 300);
         });
       },
       
-      // Initialize the side map
-      initSideMap() {
-        const container = document.getElementById('side-map-container');
-        if (!container || !this.currentMapData) return;
-        
-        try {
-          // Check if map already exists
-          if (this.sideMap) {
-            // Clear existing GeoJSON layers
-            this.sideMap.eachLayer(layer => {
-              if (layer instanceof L.GeoJSON) {
-                this.sideMap.removeLayer(layer);
-              }
-            });
-            
-            // Add new GeoJSON data
-            this.addGeoJSONToMap(this.sideMap, this.currentMapData);
-            this.sideMap.invalidateSize();
-            return;
-          }
-          
-          // Create new map
-          this.sideMap = L.map('side-map-container', {
-            center: [51.05, 3.7],
-            zoom: 10,
-            zoomControl: true,
-            attributionControl: true
-          });
-          
-          // Setup base maps
-          this.mapTileLayers.side = {
-            osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            }),
-            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-              attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-            }),
-            topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-              attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://opentopomap.org">OpenTopoMap</a>'
-            })
-          };
-          
-          // Add default basemap
-          this.mapTileLayers.side.osm.addTo(this.sideMap);
-          
-          // Add GeoJSON data
-          this.addGeoJSONToMap(this.sideMap, this.currentMapData);
-          
-          // Force a size refresh
-          setTimeout(() => {
-            this.sideMap.invalidateSize();
-          }, 300);
-        } catch (e) {
-          console.error("Error initializing side map:", e);
+      // Close the map overlay
+      closeMapOverlay() {
+        // Exit fullscreen if active
+        if (this.isFullscreen && document.exitFullscreen) {
+          document.exitFullscreen();
         }
-      },
-      
-      // Open the fullscreen map modal
-      openMapFullscreen(geoJSON) {
-        this.fullscreenMapData = geoJSON || this.currentMapData;
-        this.isFullscreenMapOpen = true;
         
-        // Initialize the fullscreen map after the modal is shown
-        this.$nextTick(() => {
-          setTimeout(() => {
-            this.initFullscreenMap();
-          }, 300);
-        });
+        this.mapOverlayVisible = false;
       },
       
-      // Close the fullscreen map modal
-      closeFullscreenMap() {
-        this.isFullscreenMapOpen = false;
-      },
-      
-      // Initialize the fullscreen map
-      initFullscreenMap() {
-        const container = document.getElementById('fullscreen-map');
-        if (!container || !this.fullscreenMapData) return;
+      // Toggle fullscreen for the map overlay
+      toggleFullscreen() {
+        const mapContainer = document.querySelector('.map-overlay');
         
-        try {
-          // Check if map already exists
-          if (this.fullscreenMap) {
-            // Clear existing GeoJSON layers
-            this.fullscreenMap.eachLayer(layer => {
-              if (layer instanceof L.GeoJSON) {
-                this.fullscreenMap.removeLayer(layer);
-              }
-            });
-            
-            // Add new GeoJSON data
-            this.addGeoJSONToMap(this.fullscreenMap, this.fullscreenMapData);
-            this.fullscreenMap.invalidateSize();
-            return;
+        if (!mapContainer) return;
+        
+        if (!this.isFullscreen) {
+          if (mapContainer.requestFullscreen) {
+            mapContainer.requestFullscreen();
+          } else if (mapContainer.mozRequestFullScreen) {
+            mapContainer.mozRequestFullScreen();
+          } else if (mapContainer.webkitRequestFullscreen) {
+            mapContainer.webkitRequestFullscreen();
+          } else if (mapContainer.msRequestFullscreen) {
+            mapContainer.msRequestFullscreen();
           }
-          
-          // Create new map
-          this.fullscreenMap = L.map('fullscreen-map', {
-            center: [51.05, 3.7],
-            zoom: 10,
-            zoomControl: true,
-            attributionControl: true
-          });
-          
-          // Setup base maps
-          this.mapTileLayers.fullscreen = {
-            osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            }),
-            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-              attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-            }),
-            topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-              attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://opentopomap.org">OpenTopoMap</a>'
-            })
-          };
-          
-          // Add default basemap
-          this.mapTileLayers.fullscreen.osm.addTo(this.fullscreenMap);
-          
-          // Add GeoJSON data
-          this.addGeoJSONToMap(this.fullscreenMap, this.fullscreenMapData);
-          
-          // Force a size refresh
-          setTimeout(() => {
-            this.fullscreenMap.invalidateSize();
-          }, 300);
-        } catch (e) {
-          console.error("Error initializing fullscreen map:", e);
-        }
-      },
-      
-      // Change map style for a specific map
-      changeMapStyle(style, mapId = null) {
-        let map, tileLayers;
-        
-        if (mapId === 'fullscreen-map') {
-          map = this.fullscreenMap;
-          tileLayers = this.mapTileLayers.fullscreen;
         } else {
-          map = this.sideMap;
-          tileLayers = this.mapTileLayers.side;
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+          }
         }
+      },
+      
+      // Initialize the overlay map
+      initOverlayMap() {
+        const mapContainer = document.getElementById('overlay-map');
+        if (!mapContainer || !this.currentGeoJSON) return;
         
-        if (!map || !tileLayers) return;
+        try {
+          // If map already exists, just update the GeoJSON and refresh
+          if (this.overlayMap) {
+            this.addGeoJSONToMap(this.overlayMap, this.currentGeoJSON);
+            this.overlayMap.invalidateSize();
+            return;
+          }
+          
+          // Initialize new map
+          this.overlayMap = L.map('overlay-map', {
+            center: [51.05, 3.7], // Default to Belgium
+            zoom: 10,
+            maxZoom: 18
+          });
+          
+          // Initialize map styles
+          this.mapStyles.overlay = {
+            osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }),
+            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+              attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            }),
+            topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+              attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://opentopomap.org">OpenTopoMap</a>'
+            })
+          };
+          
+          // Add default basemap
+          this.mapStyles.overlay.osm.addTo(this.overlayMap);
+          
+          // Add GeoJSON data
+          this.addGeoJSONToMap(this.overlayMap, this.currentGeoJSON);
+          
+          // Force a size refresh
+          setTimeout(() => {
+            this.overlayMap.invalidateSize();
+          }, 200);
+        } catch (e) {
+          console.error("Error initializing overlay map:", e);
+        }
+      },
+      
+      // Change map style
+      changeMapStyle(style, mapType) {
+        if (!this.mapStyles[mapType]) return;
+        
+        const map = mapType === 'overlay' ? this.overlayMap : null;
+        if (!map) return;
+        
+        const styles = this.mapStyles[mapType];
         
         // Remove all base layers
-        Object.values(tileLayers).forEach(layer => {
+        Object.values(styles).forEach(layer => {
           if (map.hasLayer(layer)) {
             map.removeLayer(layer);
           }
         });
         
         // Add selected base layer
-        if (tileLayers[style]) {
-          tileLayers[style].addTo(map);
+        if (styles[style]) {
+          styles[style].addTo(map);
         }
+      },
+      
+      // Reset map view to fit all features
+      resetMapView(mapType) {
+        const map = mapType === 'overlay' ? this.overlayMap : null;
+        if (!map) return;
+        
+        // Find all GeoJSON layers
+        map.eachLayer(layer => {
+          if (layer instanceof L.GeoJSON) {
+            try {
+              if (layer.getBounds && layer.getBounds().isValid()) {
+                map.fitBounds(layer.getBounds(), { padding: [30, 30] });
+              }
+            } catch (e) {
+              console.warn("Could not fit to bounds:", e);
+              map.setView([51.05, 3.7], 10);
+            }
+          }
+        });
       },
       
       // Add GeoJSON to a map with error handling
       addGeoJSONToMap(map, geoJSONData) {
+        if (!map) return;
+        
+        // Clear existing GeoJSON layers
+        map.eachLayer(layer => {
+          if (layer instanceof L.GeoJSON) {
+            map.removeLayer(layer);
+          }
+        });
+        
         try {
-          // Convert to proper format if needed
+          // Parse GeoJSON if it's a string
           let geoJSON = geoJSONData;
-          
-          // If it's a string, parse it
           if (typeof geoJSONData === 'string') {
             try {
               geoJSON = JSON.parse(geoJSONData);
@@ -242,23 +215,21 @@
             }
           }
           
-          // Create options for GeoJSON layer
+          // Feature styling
           const geoJsonOptions = {
             style: (feature) => {
-              // Default style
               return {
                 weight: 2,
                 opacity: 1,
                 color: '#3388ff',
                 fillOpacity: 0.5,
-                fillColor: this.getColorForFeature(feature)
+                fillColor: this.getFeatureColor(feature)
               };
             },
             pointToLayer: (feature, latlng) => {
-              // Create circle markers for points
               return L.circleMarker(latlng, {
                 radius: 8,
-                fillColor: this.getColorForFeature(feature),
+                fillColor: this.getFeatureColor(feature),
                 color: '#000',
                 weight: 1,
                 opacity: 1,
@@ -266,7 +237,7 @@
               });
             },
             onEachFeature: (feature, layer) => {
-              // Add popups for all features if they have properties
+              // Add popups for properties
               if (feature.properties) {
                 const popupContent = Object.entries(feature.properties)
                   .map(([key, value]) => `<strong>${key}:</strong> ${value}`)
@@ -276,13 +247,38 @@
                   layer.bindPopup(popupContent);
                 }
               }
+              
+              // Add hover effects
+              layer.on({
+                mouseover: (e) => {
+                  const layer = e.target;
+                  layer.setStyle({
+                    weight: 3,
+                    color: '#666',
+                    dashArray: '',
+                    fillOpacity: 0.7
+                  });
+                  
+                  if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                    layer.bringToFront();
+                  }
+                },
+                mouseout: (e) => {
+                  const geoJsonLayer = e.target._eventParents ? 
+                    Object.values(e.target._eventParents)[0] : null;
+                  
+                  if (geoJsonLayer) {
+                    geoJsonLayer.resetStyle(e.target);
+                  }
+                }
+              });
             }
           };
           
-          // Create and add the GeoJSON layer
+          // Create and add GeoJSON layer
           const geoLayer = L.geoJSON(geoJSON, geoJsonOptions).addTo(map);
           
-          // Try to fit bounds if possible
+          // Fit bounds to GeoJSON
           try {
             if (geoLayer.getBounds && !geoLayer.getBounds().isEmpty()) {
               map.fitBounds(geoLayer.getBounds(), { padding: [30, 30] });
@@ -296,8 +292,47 @@
         }
       },
       
-      // Get feature count from GeoJSON
-      getMapFeatureCount(geoJSON) {
+      // Get color for feature
+      getFeatureColor(feature) {
+        if (!feature.properties) return '#3388ff';
+        
+        if (feature.properties.type) {
+          const type = feature.properties.type.toLowerCase();
+          if (type.includes('water') || type.includes('river') || type.includes('lake')) {
+            return '#0077be';  // Blue for water
+          } else if (type.includes('forest') || type.includes('park') || type.includes('green')) {
+            return '#228B22';  // Green for vegetation
+          } else if (type.includes('building') || type.includes('urban')) {
+            return '#CD5C5C';  // Red for urban
+          }
+        }
+        
+        if (feature.properties.status) {
+          const status = feature.properties.status.toLowerCase();
+          if (status.includes('occupied')) {
+            return '#FF5733';  // Red for occupied
+          } else if (status.includes('available')) {
+            return '#33FF57';  // Green for available
+          } else if (status.includes('maintenance')) {
+            return '#FFFF33';  // Yellow for maintenance
+          }
+        }
+        
+        if (feature.properties.shapeType) {
+          if (feature.properties.shapeType.includes('Point')) {
+            return '#FF5733';  // Red for points
+          } else if (feature.properties.shapeType.includes('Line')) {
+            return '#3366FF';  // Blue for lines
+          } else if (feature.properties.shapeType.includes('Polygon')) {
+            return '#33CC33';  // Green for polygons
+          }
+        }
+        
+        return '#3388ff';  // Default blue
+      },
+      
+      // Count features in GeoJSON
+      getFeatureCount(geoJSON) {
         if (!geoJSON) return 0;
         
         try {
@@ -316,61 +351,6 @@
         }
         
         return 0;
-      },
-      
-      // Get color for feature based on properties
-      getColorForFeature(feature) {
-        // This is a simple example - customize as needed
-        if (!feature.properties) return '#3388ff';
-        
-        // If it has a type or status property, use different colors
-        if (feature.properties.type) {
-          const type = feature.properties.type.toLowerCase();
-          if (type.includes('water') || type.includes('river') || type.includes('lake')) {
-            return '#0077be';
-          } else if (type.includes('forest') || type.includes('park') || type.includes('green')) {
-            return '#228B22';
-          } else if (type.includes('building') || type.includes('urban')) {
-            return '#CD5C5C';
-          }
-        }
-        
-        if (feature.properties.status) {
-          const status = feature.properties.status.toLowerCase();
-          if (status.includes('occupied')) {
-            return '#FF5733';
-          } else if (status.includes('available')) {
-            return '#33FF57';
-          } else if (status.includes('maintenance')) {
-            return '#FFFF33';
-          }
-        }
-        
-        if (feature.properties.shapeType) {
-          const shapeType = feature.properties.shapeType;
-          if (shapeType.includes('Point')) {
-            return '#FF5733';
-          } else if (shapeType.includes('Line')) {
-            return '#3366FF';
-          } else if (shapeType.includes('Polygon')) {
-            return '#33CC33';
-          }
-        }
-        
-        return '#3388ff'; // Default blue
-      },
-      
-      // Refresh maps when needed
-      refreshMaps() {
-        setTimeout(() => {
-          if (this.sideMap && this.mapVisible) {
-            this.sideMap.invalidateSize();
-          }
-          
-          if (this.fullscreenMap && this.isFullscreenMapOpen) {
-            this.fullscreenMap.invalidateSize();
-          }
-        }, 300);
       },
       
       // Method to interrupt the generation
@@ -472,13 +452,16 @@
             console.log("Received GeoJSON data");
             
             let parsedGeoJSON = data.geoJSON;
-            // If it's a string, parse it
+            // If it's a string, parse it to make sure it's valid
             if (typeof data.geoJSON === 'string') {
               try {
-                parsedGeoJSON = JSON.parse(data.geoJSON);
-                console.log("Parsed GeoJSON from string");
+                // Just to validate, we'll keep the original string
+                JSON.parse(data.geoJSON);
+                console.log("Valid GeoJSON string");
               } catch (e) {
                 console.error("Failed to parse GeoJSON string:", e);
+                // Not valid JSON, don't add it
+                return;
               }
             }
             
