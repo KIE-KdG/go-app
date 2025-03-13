@@ -97,13 +97,11 @@ func (m *ProjectModel) Get(id uuid.UUID) (*Project, error) {
 
 func (m *ProjectModel) GetByUserID(userID uuid.UUID) ([]*Project, error) {
 	stmt := `
-        SELECT p.id, p.name, p.description, p.user_id, p.external_id, 
-               p.created, p.updated,
+        SELECT p.id, p.name,
                (SELECT COUNT(*) FROM files_projects fp WHERE fp.project_id = p.id) AS document_count
         FROM projects p
         JOIN users_projects up ON p.id = up.project_id
         WHERE up.user_id = $1
-        ORDER BY p.updated DESC
     `
 	
 	rows, err := m.DB.Query(stmt, userID)
@@ -121,11 +119,6 @@ func (m *ProjectModel) GetByUserID(userID uuid.UUID) ([]*Project, error) {
 		err := rows.Scan(
 			&project.ID,
 			&project.Name,
-			&project.Description,
-			&project.UserID,
-			&externalID,
-			&project.Created,
-			&project.Updated,
 			&project.DocumentCount,
 		)
 		if err != nil {
@@ -159,11 +152,9 @@ func (m *ProjectModel) UpdateExternalID(id uuid.UUID, externalID string) error {
 
 func (m *ProjectModel) GetAll() ([]*Project, error) {
 	stmt := `
-        SELECT p.id, p.name, p.description, p.user_id, p.external_id, 
-               p.created, p.updated,
+        SELECT p.id, p.name,
                (SELECT COUNT(*) FROM files_projects fp WHERE fp.project_id = p.id) AS document_count
         FROM projects p
-        ORDER BY p.updated DESC
     `
 	
 	rows, err := m.DB.Query(stmt)
@@ -176,24 +167,14 @@ func (m *ProjectModel) GetAll() ([]*Project, error) {
 	
 	for rows.Next() {
 		var project Project
-		var externalID sql.NullString
 		
 		err := rows.Scan(
 			&project.ID,
 			&project.Name,
-			&project.Description,
-			&project.UserID,
-			&externalID,
-			&project.Created,
-			&project.Updated,
 			&project.DocumentCount,
 		)
 		if err != nil {
 			return nil, err
-		}
-		
-		if externalID.Valid {
-			project.ExternalID = externalID.String
 		}
 		
 		projects = append(projects, &project)

@@ -48,7 +48,6 @@ func (app *application) projectCreate(w http.ResponseWriter, r *http.Request) {
 	
 	// Get the form values
 	name := r.PostForm.Get("name")
-	description := r.PostForm.Get("description")
 	
 	// Basic validation
 	if name == "" {
@@ -63,38 +62,17 @@ func (app *application) projectCreate(w http.ResponseWriter, r *http.Request) {
 			return
 	}
 	
-	// Create the project locally first
-	projectID, err := app.projects.Insert(name, description, userID)
+	_, err = app.externalAPI.CreateExternalProject(userID.String(), name)
 	if err != nil {
-			app.serverError(w, err)
+			app.errorLog.Printf("Failed to create project in external system: %v", err)
 			return
 	}
-	
-	// Now create the project in the external system
-	externalProjectResp, err := app.externalAPI.CreateExternalProject(userID.String(), name)
-	if err != nil {
-			// Log the error but don't fail - external integration is secondary
-			app.errorLog.Printf("Failed to create project in external system: %v", err)
-			
-			// Store the error in the session to display to the user
-			app.sessionManager.Put(r.Context(), "flash", 
-					"Project created successfully, but failed to sync with external system. Some features may be limited.")
-	} else {
-			app.infoLog.Printf("Project created in external system with ID: %s", externalProjectResp.ProjectID)
-			
-			// Update our local project with the external ID reference
-			// This assumes we've added an ExternalID field to our Project model
-			err = app.projects.UpdateExternalID(projectID, externalProjectResp.ProjectID)
-			if err != nil {
-					app.errorLog.Printf("Failed to update project with external ID: %v", err)
-			}
-			
-			app.sessionManager.Put(r.Context(), "flash", "Project created successfully")
-	}
-	
-	// Redirect to the projects page
+
+	app.sessionManager.Put(r.Context(), "flash", "Project created successfully")
+
 	http.Redirect(w, r, "/projects", http.StatusSeeOther)
 }
+
 // projectView shows details for a specific project
 func (app *application) projectView(w http.ResponseWriter, r *http.Request) {
 	// Get project ID from URL
