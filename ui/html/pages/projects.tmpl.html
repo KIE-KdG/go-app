@@ -1,0 +1,92 @@
+{{define "title"}}Projects{{end}}
+{{define "main"}}
+<div class="container mx-auto px-4 py-8">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold">Your Projects</h1>
+    <button id="newProjectBtn" class="btn btn-primary">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+      New Project
+    </button>
+  </div>
+  
+  <!-- Project Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {{if .Projects}}
+      {{range .Projects}}
+        <div class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow duration-300">
+          <div class="card-body">
+            <h2 class="card-title">{{.Name}}</h2>
+            <p class="text-sm text-base-content/70 line-clamp-2">{{if .Description}}{{.Description}}{{else}}No description provided{{end}}</p>
+            <div class="flex justify-between items-center mt-4">
+              <div class="badge badge-outline">{{.DocumentCount}} documents</div>
+              <p class="text-xs text-base-content/50">Updated: {{humanDate .Updated}}</p>
+            </div>
+            <div class="card-actions justify-end mt-4">
+              <a href="/project/{{.ID}}" class="btn btn-sm btn-outline">View</a>
+              <a href="/admin/upload?project={{.ID}}" class="btn btn-sm btn-primary">Upload Files</a>
+            </div>
+          </div>
+        </div>
+      {{end}}
+    {{else}}
+      <div class="col-span-full flex flex-col items-center justify-center p-12 text-center bg-base-200 rounded-lg">
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-4 opacity-50">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <h3 class="text-xl font-bold mb-2">No Projects Yet</h3>
+        <p class="text-base-content/70 mb-4">Create your first project to start uploading documents</p>
+        <button id="emptyStateProjectBtn" class="btn btn-primary">Create Project</button>
+      </div>
+    {{end}}
+  </div>
+  
+  <!-- New Project Modal -->
+  <dialog id="newProjectModal" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg mb-4">Create New Project</h3>
+      <form id="newProjectForm" method="post" action="/project/create">
+        <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
+        <div class="form-control mb-4">
+          <label class="label">
+            <span class="label-text">Project Name</span>
+          </label>
+          <input type="text" name="name" class="input input-bordered" required placeholder="Enter project name">
+        </div>
+        <div class="form-control mb-6">
+          <label class="label">
+            <span class="label-text">Description (optional)</span>
+          </label>
+          <textarea name="description" class="textarea textarea-bordered" rows="3" placeholder="Enter project description"></textarea>
+        </div>
+        <div class="modal-action">
+          <button type="button" class="btn" onclick="document.getElementById('newProjectModal').close()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Project</button>
+        </div>
+      </form>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Open modal when the new project button is clicked
+      document.getElementById('newProjectBtn').addEventListener('click', function() {
+        document.getElementById('newProjectModal').showModal();
+      });
+      
+      // Also for the empty state button
+      const emptyStateBtn = document.getElementById('emptyStateProjectBtn');
+      if (emptyStateBtn) {
+        emptyStateBtn.addEventListener('click', function() {
+          document.getElementById('newProjectModal').showModal();
+        });
+      }
+    });
+  </script>
+</div>
+{{end}}

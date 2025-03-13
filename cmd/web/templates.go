@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
 	"kdg/be/lab/internal/models"
 	"path/filepath"
@@ -20,6 +21,10 @@ type templateData struct {
 	IsAuthenticated bool
 	CSRFToken       string
 	Localizer       *i18n.Localizer
+	Projects        []*models.Project
+	Project         *models.Project
+	SelectedProject *models.Project
+	Files           []*models.File
 }
 
 func humanDate(t time.Time) string {
@@ -32,6 +37,49 @@ func humanDate(t time.Time) string {
 
 var functions = template.FuncMap{
 	"humanDate": humanDate,
+	"formatFileSize": formatFileSize,
+	"roleBadgeClass": roleBadgeClass,
+	"statusBadgeClass": statusBadgeClass,
+}
+
+// Role badge helper function
+func roleBadgeClass(role string) string {
+	switch role {
+	case "CONTENT":
+			return "badge badge-primary"
+	case "METADATA":
+			return "badge badge-secondary"
+	case "SCHEMA":
+			return "badge badge-accent"
+	default:
+			return "badge badge-ghost"
+	}
+}
+
+// Status badge helper function
+func statusBadgeClass(status string) string {
+	switch status {
+	case "processed":
+			return "badge badge-success"
+	case "uploaded":
+			return "badge badge-info"
+	case "error":
+			return "badge badge-error"
+	default:
+			return "badge badge-warning"
+	}
+}
+
+// Add this function
+func formatFileSize(size int64) string {
+	if size < 1024 {
+		return fmt.Sprintf("%d B", size)
+	} else if size < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(size)/1024)
+	} else if size < 1024*1024*1024 {
+		return fmt.Sprintf("%.1f MB", float64(size)/(1024*1024))
+	}
+	return fmt.Sprintf("%.1f GB", float64(size)/(1024*1024*1024))
 }
 
 // List of templates that should use the auth_base.tmpl.html instead of base.tmpl.html

@@ -185,3 +185,17 @@ func (app *application) setFlashAndRedirect(w http.ResponseWriter, r *http.Reque
 	app.sessionManager.Put(r.Context(), "flash", flashMessage)
 	http.Redirect(w, r, redirectURL, status)
 }
+
+func (app *application) tryWithRetry(operation func() error, maxRetries int) error {
+	var err error
+	for i := 0; i < maxRetries; i++ {
+			err = operation()
+			if err == nil {
+					return nil
+			}
+			
+			app.errorLog.Printf("Operation failed (attempt %d/%d): %v", i+1, maxRetries, err)
+			time.Sleep(time.Duration(i+1) * 500 * time.Millisecond) // Exponential backoff
+	}
+	return err
+}

@@ -81,7 +81,7 @@ func createSchema(db *sql.DB) error {
 			hashed_password TEXT NOT NULL,
 			created DATETIME NOT NULL
 	);`); err != nil {
-			return err
+		return err
 	}
 
 	// Create sessions table
@@ -109,7 +109,7 @@ func createSchema(db *sql.DB) error {
 			last_activity TIMESTAMP NOT NULL,
 			FOREIGN KEY (user_id) REFERENCES users(id)
 	);`); err != nil {
-			return err
+		return err
 	}
 
 	// Create chats indices
@@ -133,6 +133,56 @@ func createSchema(db *sql.DB) error {
 		timestamp TIMESTAMP NOT NULL,
 		FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE
 	);`); err != nil {
+		return err
+	}
+
+	// Create projects table
+	if _, err = tx.Exec(`
+	CREATE TABLE projects (
+			id BLOB PRIMARY KEY DEFAULT (uuid_blob(uuid())),
+			name TEXT NOT NULL,
+			description TEXT,
+			user_id BLOB NOT NULL,
+			external_id TEXT,  -- Add this line
+			created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`); err != nil {
+		return err
+	}
+
+	// Create project indices
+	if _, err = tx.Exec(`
+CREATE INDEX idx_projects_user_id ON projects(user_id);`); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`
+CREATE TABLE files (
+    id BLOB PRIMARY KEY DEFAULT (uuid_blob(uuid())),
+    name TEXT NOT NULL,
+    description TEXT,
+    file_path TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    storage_location TEXT NOT NULL,
+    project_id BLOB NOT NULL,
+    user_id BLOB NOT NULL,
+    uploaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    processed_at TIMESTAMP,
+    status TEXT NOT NULL DEFAULT 'uploaded',
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);`); err != nil {
+		return err
+	}
+
+	// Create file indices
+	if _, err = tx.Exec(`
+CREATE INDEX idx_files_project_id ON files(project_id);
+CREATE INDEX idx_files_user_id ON files(user_id);
+CREATE INDEX idx_files_status ON files(status);
+`); err != nil {
 		return err
 	}
 

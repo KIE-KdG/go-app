@@ -1,0 +1,124 @@
+{{define "title"}}Project: {{.Project.Name}}{{end}}
+{{define "main"}}
+{{if not .Project.ExternalID}}
+<form action="/project/{{.Project.ID}}/sync" method="post" class="inline">
+  <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
+  <button type="submit" class="btn btn-outline btn-warning">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38" />
+    </svg>
+    Sync with External System
+  </button>
+</form>
+{{end}}
+<div class="container mx-auto px-4 py-8">
+  <div class="flex justify-between items-center mb-6">
+    <div>
+      <div class="flex items-center gap-2">
+        <a href="/projects" class="btn btn-ghost btn-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          Back
+        </a>
+        <h1 class="text-2xl font-bold">{{.Project.Name}}</h1>
+      </div>
+      <p class="text-base-content/70 mt-1">
+        {{if .Project.Description}}{{.Project.Description}}{{else}}No description provided{{end}}
+      </p>
+    </div>
+    <a href="/admin/upload?project={{.Project.ID}}" class="btn btn-primary">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="17 8 12 3 7 8"></polyline>
+        <line x1="12" y1="3" x2="12" y2="15"></line>
+      </svg>
+      Upload Documents
+    </a>
+  </div>
+
+  <!-- Project Info Card -->
+  <div class="stats shadow mb-6 w-full">
+    <div class="stat">
+      <div class="stat-title">Documents</div>
+      <div class="stat-value">{{.Project.DocumentCount}}</div>
+      <div class="stat-desc">Total documents in this project</div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-title">Created</div>
+      <div class="stat-value text-lg">{{humanDate .Project.Created}}</div>
+      <div class="stat-desc">Project creation date</div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-title">Last Updated</div>
+      <div class="stat-value text-lg">{{humanDate .Project.Updated}}</div>
+      <div class="stat-desc">Last activity</div>
+    </div>
+  </div>
+
+  <!-- Documents List -->
+  <div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+      <h2 class="card-title mb-4">Documents</h2>
+
+      {{if .Files}}
+      <div class="overflow-x-auto">
+        <table class="table table-zebra w-full">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Role</th>
+              <th>Size</th>
+              <th>Uploaded</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Files}}
+            <tr>
+              <td>{{.Name}}</td>
+              <td>{{.MimeType}}</td>
+              <td>
+                <div class="{{roleBadgeClass .Role}}">
+                  {{.Role}}
+                </div>
+              </td>
+              <td>{{formatFileSize .Size}}</td>
+              <td>{{humanDate .UploadedAt}}</td>
+              <td>
+                <div class="{{statusBadgeClass .Status}}">
+                  {{.Status}}
+                </div>
+              </td>
+              <td class="flex gap-2">
+                <button class="btn btn-xs btn-outline">View</button>
+                <button class="btn btn-xs btn-error">Delete</button>
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{else}}
+      <div class="flex flex-col items-center justify-center p-8 bg-base-200 rounded-lg">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-4 opacity-50">
+          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+          <polyline points="13 2 13 9 20 9"></polyline>
+        </svg>
+        <h3 class="text-lg font-medium mb-2">No Documents Yet</h3>
+        <p class="text-base-content/70 text-center mb-4">Upload documents to use with the RAG system</p>
+        <a href="/admin/upload?project={{.Project.ID}}" class="btn btn-primary">Upload First Document</a>
+      </div>
+      {{end}}
+    </div>
+  </div>
+</div>
+{{end}}

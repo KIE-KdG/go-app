@@ -1,28 +1,387 @@
 {{define "title"}}Admin{{end}}
 {{define "main"}}
+<div class="container mx-auto px-4 py-8">
+  <h1 class="text-2xl font-bold mb-6">Document Upload</h1>
 
-<body>
-  <form enctype="multipart/form-data" action="/api/upload" method="post">
-    <div class="card bg-base-100 w-96 shadow-x1">
-      <div class="card-body items-center">
-        <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
+  <!-- Add to admin.tmpl.html -->
+  {{if not .Projects}}
+  <div class="alert alert-info mb-4">
+    <p>You need to create a project before uploading documents.</p>
+    <a href="/projects" class="btn btn-primary mt-2">Go to Projects</a>
+  </div>
+  {{end}}
 
-        <div class="justify-start">
-          <h2 class="card-title">Choose a file:</h2>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+    <!-- Upload Form -->
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h2 class="card-title">Upload Document</h2>
+        <p class="text-sm text-base-content/70 mb-4">Upload documents for RAG processing.</p>
+
+        <form id="uploadForm" enctype="multipart/form-data" class="space-y-4">
+          <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
+
+          <!-- Project Selection -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Project</span>
+            </label>
+            <select id="projectSelect" name="project_id" class="select select-bordered w-full" required>
+              <option value="">Select a project</option>
+              {{range .Projects}}
+              <option value="{{.ID}}">{{.Name}}</option>
+              {{end}}
+            </select>
+          </div>
+
+          <!-- File Selection -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Document</span>
+            </label>
+            <input type="file" name="document" id="documentInput" required
+              class="file-input file-input-bordered w-full" />
+          </div>
+
+          <!-- File Role -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Document Role</span>
+            </label>
+            <select id="roleSelect" name="role" class="select select-bordered w-full" required>
+              <option value="table_explanation">Table Explenation</option>
+              <option value="column_explanation">Column Explenation</option>
+              <option value="informational">Informational</option>
+            </select>
+          </div>
+
+          <!-- Storage Location -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Storage Location</span>
+            </label>
+            <select id="storageSelect" name="storage_location" class="select select-bordered w-full" required>
+              <option value="local">Local Storage</option>
+              <option value="S3">S3 Storage</option>
+            </select>
+          </div>
+
+          <!-- Chunking Options -->
+          <div class="form-control">
+            <label class="label cursor-pointer justify-start gap-2">
+              <input type="checkbox" id="chunkAfterUpload" name="chunk_after_upload" class="checkbox" />
+              <span class="label-text">Process document after upload</span>
+            </label>
+          </div>
+
+          <!-- Submit Button -->
+          <div class="card-actions justify-end">
+            <button type="submit" id="uploadButton" class="btn btn-primary">
+              Upload Document
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Status Panel -->
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h2 class="card-title">Upload Status</h2>
+
+        <!-- Progress Indicator -->
+        <div id="progressContainer" class="hidden">
+          <div class="flex items-center gap-2 mb-2">
+            <span id="progressStatus">Preparing upload...</span>
+            <div class="loading loading-spinner loading-sm"></div>
+          </div>
+          <progress id="uploadProgress" class="progress progress-primary w-full" value="0" max="100"></progress>
+          <p id="progressDetails" class="text-sm mt-1">0%</p>
         </div>
 
-        <input type="file" name="myFile" required class="file-input file-input-bordered w-full max-w-xs" />
+        <!-- Success/Error Messages -->
+        <div id="resultContainer" class="hidden my-4">
+          <div id="successMessage" class="alert alert-success hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none"
+              viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span id="successText"></span>
+          </div>
 
-        <div class="btn card-actions content-center place-content-start w-full max-w-xs">
-          <input type="checkbox" id="chunk" name="chunk" value="true">
-          <label for="chunk">Enable Chunking</label>
-          <span class="badge badge-info justify-end">Optional</span>
+          <div id="errorMessage" class="alert alert-error hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none"
+              viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span id="errorText"></span>
+          </div>
         </div>
-        <div class="card-actions justify-end">
-          <input type="submit" value="Upload" class="btn btn-primary" />
+
+        <!-- Document Details After Upload -->
+        <div id="documentDetails" class="hidden mt-4">
+          <h3 class="font-bold text-lg mb-2">Document Details</h3>
+          <div class="overflow-x-auto">
+            <table class="table table-zebra w-full">
+              <tbody id="detailsTable">
+                <!-- Will be filled with document metadata -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Processing Status -->
+        <div id="processingContainer" class="hidden mt-4">
+          <h3 class="font-bold text-lg mb-2">Processing Status</h3>
+          <ul id="processingSteps" class="steps steps-vertical">
+            <!-- Will be filled with processing steps -->
+          </ul>
         </div>
       </div>
     </div>
-  </form>
-</body>
+  </div>
+</div>
+
+<!-- Client-side JavaScript for handling upload via WebSocket -->
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const uploadForm = document.getElementById('uploadForm');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressStatus = document.getElementById('progressStatus');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const progressDetails = document.getElementById('progressDetails');
+    const resultContainer = document.getElementById('resultContainer');
+    const successMessage = document.getElementById('successMessage');
+    const successText = document.getElementById('successText');
+    const errorMessage = document.getElementById('errorMessage');
+    const errorText = document.getElementById('errorText');
+    const documentDetails = document.getElementById('documentDetails');
+    const detailsTable = document.getElementById('detailsTable');
+    const processingContainer = document.getElementById('processingContainer');
+    const processingSteps = document.getElementById('processingSteps');
+
+    uploadForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      // Reset UI
+      progressContainer.classList.remove('hidden');
+      resultContainer.classList.add('hidden');
+      successMessage.classList.add('hidden');
+      errorMessage.classList.add('hidden');
+      documentDetails.classList.add('hidden');
+      processingContainer.classList.add('hidden');
+
+      // Get form data
+      const projectId = document.getElementById('projectSelect').value;
+      const file = document.getElementById('documentInput').files[0];
+      const role = document.getElementById('roleSelect').value;
+      const storageLocation = document.getElementById('storageSelect').value;
+      const chunkAfterUpload = document.getElementById('chunkAfterUpload').checked;
+
+      if (!projectId || !file) {
+        showError('Please select a project and file');
+        return;
+      }
+
+      // Get CSRF token
+      const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+
+      try {
+        // Step 1: Connect to our proxy WebSocket endpoint
+        progressStatus.textContent = 'Connecting...';
+        const ws = new WebSocket(`wss://${window.location.host}/ws/upload`);
+
+        ws.onopen = async function () {
+          progressStatus.textContent = 'Starting upload...';
+
+          // First message: send file metadata
+          const metadata = {
+            name: file.name,
+            roles: [role],
+            storage_location: storageLocation,
+            project_id: projectId,
+            csrf_token: csrfToken
+          };
+
+          ws.send(JSON.stringify(metadata));
+
+          // Read and send file in chunks
+          const CHUNK_SIZE = 64 * 1024; // 64KB chunks
+          const reader = new FileReader();
+          let offset = 0;
+
+          progressStatus.textContent = 'Uploading file...';
+
+          // Function to read and send a chunk
+          const readAndSendChunk = () => {
+            const slice = file.slice(offset, offset + CHUNK_SIZE);
+            reader.readAsArrayBuffer(slice);
+          };
+
+          // Set up reader onload handler
+          reader.onload = function () {
+            // Convert ArrayBuffer to Blob which WebSocket can send
+            const chunk = new Blob([reader.result]);
+            ws.send(chunk);
+
+            offset += reader.result.byteLength;
+            const progress = Math.min(100, Math.round((offset / file.size) * 100));
+
+            // Update progress bar
+            uploadProgress.value = progress;
+            progressDetails.textContent = `${progress}% (${formatBytes(offset)} of ${formatBytes(file.size)})`;
+
+            // Continue with next chunk or signal end
+            if (offset < file.size) {
+              readAndSendChunk();
+            } else {
+              // Send EOF signal
+              ws.send(new Blob(['EOF']));
+              progressStatus.textContent = 'Processing document...';
+            }
+          };
+
+          // Start reading the first chunk
+          readAndSendChunk();
+        };
+
+        // Handle messages from the server
+        ws.onmessage = function (event) {
+          const response = JSON.parse(event.data);
+
+          if (response.error) {
+            showError(response.error);
+            return;
+          }
+
+          if (response.status === 'uploaded') {
+            // Document upload complete
+            showSuccess('Document uploaded successfully!');
+            displayDocumentDetails(response.metadata);
+
+            // Start processing if requested
+            if (chunkAfterUpload) {
+              startProcessing(projectId);
+            }
+          } else if (response.status === 'processing') {
+            // Update processing status
+            updateProcessingStatus(response);
+          } else if (response.status === 'completed') {
+            // Processing complete
+            showSuccess('Document processed successfully!');
+            processingContainer.classList.remove('hidden');
+            addProcessingStep('complete', 'Processing complete');
+          } else {
+            // Other status updates
+            progressStatus.textContent = response.message || 'Processing...';
+          }
+        };
+
+        ws.onerror = function (error) {
+          showError('WebSocket error occurred');
+          console.error('WebSocket error:', error);
+        };
+
+        ws.onclose = function () {
+          if (!resultContainer.classList.contains('hidden')) {
+            // Already showed a result, don't show the disconnection message
+            return;
+          }
+          showError('Connection closed unexpectedly');
+        };
+
+      } catch (error) {
+        showError(`Error: ${error.message}`);
+        console.error('Upload error:', error);
+      }
+    });
+
+    // Helper function to format bytes
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Show error message
+    function showError(message) {
+      progressContainer.classList.add('hidden');
+      resultContainer.classList.remove('hidden');
+      errorMessage.classList.remove('hidden');
+      errorText.textContent = message;
+    }
+
+    // Show success message
+    function showSuccess(message) {
+      progressContainer.classList.add('hidden');
+      resultContainer.classList.remove('hidden');
+      successMessage.classList.remove('hidden');
+      successText.textContent = message;
+    }
+
+    // Display document details in table
+    function displayDocumentDetails(metadata) {
+      documentDetails.classList.remove('hidden');
+      detailsTable.innerHTML = '';
+
+      const rows = [
+        { label: 'Document ID', value: metadata.id },
+        { label: 'Name', value: metadata.name },
+        { label: 'Project', value: metadata.project_id },
+        { label: 'Role', value: metadata.roles.join(', ') },
+        { label: 'Storage Location', value: metadata.storage_location },
+        { label: 'Upload Date', value: new Date().toLocaleString() }
+      ];
+
+      rows.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="font-medium">${row.label}</td>
+          <td>${row.value}</td>
+        `;
+        detailsTable.appendChild(tr);
+      });
+    }
+
+    // Start document processing
+    function startProcessing(projectId) {
+      processingContainer.classList.remove('hidden');
+      processingSteps.innerHTML = '';
+
+      addProcessingStep('current', 'Starting document processing');
+
+      const wsProcess = new WebSocket(`wss://${window.location.host}/ws/process/${projectId}`);
+
+      wsProcess.onmessage = function (event) {
+        const data = JSON.parse(event.data);
+        updateProcessingStatus(data);
+      };
+
+      wsProcess.onerror = function () {
+        addProcessingStep('error', 'Error during processing');
+      };
+    }
+
+    // Add a processing step to the steps list
+    function addProcessingStep(status, message) {
+      const li = document.createElement('li');
+      li.className = `step ${status === 'current' ? 'step-primary' :
+        status === 'complete' ? 'step-success' :
+          status === 'error' ? 'step-error' : ''}`;
+      li.textContent = message;
+      processingSteps.appendChild(li);
+    }
+
+    // Update processing status display
+    function updateProcessingStatus(data) {
+      if (data.step && data.message) {
+        addProcessingStep('current', data.message);
+      }
+    }
+  });
+</script>
 {{end}}

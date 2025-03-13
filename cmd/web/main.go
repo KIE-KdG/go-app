@@ -31,10 +31,13 @@ type application struct {
 	users          *models.UserModel
 	chats          *models.ChatModel
 	messages       *models.MessageModel
+	projects       *models.ProjectModel
+	files          *models.FileModel
 	templateCache  map[string]*template.Template
 	formDecoder    *form.Decoder
 	sessionManager *scs.SessionManager
 	i18nBundle     *i18n.Bundle
+	externalAPI     *ExternalAPIClient
 }
 
 func main() {
@@ -42,6 +45,7 @@ func main() {
 	ollama := flag.String("ollama", "llama3", "Ollama model to use")
 	dsn := flag.String("dsn", "data/sqlite_lab.db", "sqlite data source name")
 	chatPort := flag.String("chatPort", ":8000", "Chat server network address")
+	externalAPIBaseURL := flag.String("externalAPI", "http://localhost:8000", "External API base URL")
 	flag.Parse()
 
 	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
@@ -79,10 +83,13 @@ func main() {
 		users:          &models.UserModel{DB: db},
 		chats:          &models.ChatModel{DB: db},
 		messages:       &models.MessageModel{DB: db},
+		projects:       &models.ProjectModel{DB: db},
+		files:          &models.FileModel{DB: db}, 
 		templateCache:  templateCache,
 		formDecoder:    formDecoder,
 		sessionManager: sessionManager,
 		i18nBundle:     i18nBundle,
+		externalAPI: NewExternalAPIClient(*externalAPIBaseURL),
 	}
 
 	tlsConfig := &tls.Config{

@@ -1,114 +1,215 @@
 package models
 
 import (
-	"database/sql"
-	"time"
+    "database/sql"
+    "errors"
+    "time"
+
+    "github.com/google/uuid"
 )
 
-// Project represents a project with an optional creation date.
+// Project represents a container for documents and other resources
 type Project struct {
-    ID           string     `db:"id" json:"id"`
-    Name         string     `db:"name" json:"name"`
-    CreationDate *time.Time `db:"creation_date" json:"creation_date"`
-}
-
-// UserMetadata represents metadata for a user.
-type UserMetadata struct {
-    ID   string `db:"id" json:"id"`
-    Name string `db:"name" json:"name"`
-    Role string `db:"role" json:"role"`
-}
-
-// DatabaseMetadata contains metadata about a database connection.
-type DatabaseMetadata struct {
-    ID               string `db:"id" json:"id"`
-    SourceConnString string `db:"source_conn_string" json:"source_conn_string"`
-    DBType           string `db:"db_type" json:"db_type"`
-    ProjectID        string `db:"project_id" json:"project_id"`
-}
-
-// Rule represents a rule with an optional integer ID.
-type Rule struct {
-    ID          *int   `db:"id" json:"id"`
-    Description string `db:"description" json:"description"`
-    RuleType    string `db:"rule_type" json:"rule_type"`
-    ProjectID   string `db:"project_id" json:"project_id"`
-}
-
-// TableMetadata represents metadata for a table.
-type TableMetadata struct {
-    ID          string `db:"id" json:"id"`
-    Schema      string `db:"schema" json:"schema"`
-    TableName   string `db:"table_name" json:"table_name"`
-    Description string `db:"description" json:"description"`
-    DatabaseID  string `db:"database_id" json:"database_id"`
-}
-
-// ColumnMetadata represents metadata for a column.
-type ColumnMetadata struct {
-    ID          string `db:"id" json:"id"`
-    Name        string `db:"name" json:"name"`
-    DataType    string `db:"datatype" json:"datatype"`
-    Description string `db:"description" json:"description"`
-    TableID     string `db:"table_id" json:"table_id"`
+    ID          uuid.UUID
+    Name        string
+    Description string
+    UserID      uuid.UUID
+    ExternalID   string
+    Created     time.Time
+    Updated     time.Time
+    DocumentCount int // Used for UI display
 }
 
 type ProjectModel struct {
-		DB *sql.DB
+    DB *sql.DB
 }
 
-func (m *ProjectModel) Insert(name string) error {
-	stmt := `INSERT INTO projects (name, creation_date) VALUES(?, datetime('now'))`
+// Insert creates a new project for a user
+func (m *ProjectModel) Insert(name, description string, userID uuid.UUID) (uuid.UUID, error) {
+    // Generate a new UUID for the project
+    projectID := uuid.New()
 
-	statement, err := m.DB.Prepare(stmt)
-	if err != nil {
-		return err
-	}
+    stmt := `
+        INSERT INTO projects (id, name, description, user_id, created, updated)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `
+    
+    _, err := m.DB.Exec(stmt, projectID, name, description, userID)
+    if err != nil {
+        return uuid.Nil, err
+    }
 
-	_, err = statement.Exec(name)
-	if err != nil {
-		return err
-	}
-
-	return nil
+    return projectID, nil
 }
 
-func (m *ProjectModel) Get(id string) (*Project, error) {
-	stmt := `SELECT id, name, creation_date FROM projects WHERE id = ?`
-
-	row := m.DB.QueryRow(stmt, id)
-
-	project := &Project{}
-
-	err := row.Scan(&project.ID, &project.Name, &project.CreationDate)
-	if err != nil {
-		return nil, err
-	}
-
-	return project, nil
+// Get retrieves a project by its ID
+func (m *ProjectModel) Get(id uuid.UUID) (*Project, error) {
+    stmt := `
+        SELECT p.id, p.name, p.description, p.user_id, p.created, p.updated,
+               (SELECT COUNT(*) FROM files WHERE project_id = p.id) AS document_count
+        FROM projects p
+        WHERE p.id = ?
+    `
+    
+    var project Project
+    err := m.DB.QueryRow(stmt, id).Scan(
+        &project.ID,
+        &project.Name,
+        &project.Description,
+        &project.UserID,
+        &project.Created,
+        &project.Updated,
+        &project.DocumentCount,
+    )
+    
+    if err != nil {
+        if errors.Is(err, sql.ErrNoRows) {
+            return nil, ErrNoRecord
+        }
+        return nil, err
+    }
+    
+    return &project, nil
 }
 
+// GetAll retrieves all projects
 func (m *ProjectModel) GetAll() ([]*Project, error) {
-	stmt := `SELECT id, name, creation_date FROM projects`
+    stmt := `
+        SELECT p.id, p.name, p.description, p.user_id, p.created, p.updated,
+               (SELECT COUNT(*) FROM files WHERE project_id = p.id) AS document_count
+        FROM projects p
+        ORDER BY p.updated DESC
+    `
+    
+    rows, err := m.DB.Query(stmt)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+    
+    projects := []*Project{}
+    
+    for rows.Next() {
+        var project Project
+        err := rows.Scan(
+            &project.ID,
+            &project.Name,
+            &project.Description,
+            &project.UserID,
+            &project.Created,
+            &project.Updated,
+            &project.DocumentCount,
+        )
+        if err != nil {
+            return nil, err
+        }
+        
+        projects = append(projects, &project)
+    }
+    
+    if err = rows.Err(); err != nil {
+        return nil, err
+    }
+    
+    return projects, nil
+}
 
-	rows, err := m.DB.Query(stmt)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+// GetByUserID retrieves all projects for a specific user
+func (m *ProjectModel) GetByUserID(userID uuid.UUID) ([]*Project, error) {
+    stmt := `
+        SELECT p.id, p.name, p.description, p.user_id, p.created, p.updated,
+               (SELECT COUNT(*) FROM files WHERE project_id = p.id) AS document_count
+        FROM projects p
+        WHERE p.user_id = ?
+        ORDER BY p.updated DESC
+    `
+    
+    rows, err := m.DB.Query(stmt, userID)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+    
+    projects := []*Project{}
+    
+    for rows.Next() {
+        var project Project
+        err := rows.Scan(
+            &project.ID,
+            &project.Name,
+            &project.Description,
+            &project.UserID,
+            &project.Created,
+            &project.Updated,
+            &project.DocumentCount,
+        )
+        if err != nil {
+            return nil, err
+        }
+        
+        projects = append(projects, &project)
+    }
+    
+    if err = rows.Err(); err != nil {
+        return nil, err
+    }
+    
+    return projects, nil
+}
 
-	projects := []*Project{}
+// Update modifies an existing project
+func (m *ProjectModel) Update(id uuid.UUID, name, description string) error {
+    stmt := `
+        UPDATE projects
+        SET name = ?, description = ?, updated = CURRENT_TIMESTAMP
+        WHERE id = ?
+    `
+    
+    _, err := m.DB.Exec(stmt, name, description, id)
+    if err != nil {
+        return err
+    }
+    
+    return nil
+}
 
-	for rows.Next() {
-		project := &Project{}
+// Delete removes a project and its associated data
+func (m *ProjectModel) Delete(id uuid.UUID) error {
+    // Begin a transaction to ensure all related data is deleted
+    tx, err := m.DB.Begin()
+    if err != nil {
+        return err
+    }
+    defer func() {
+        if err != nil {
+            tx.Rollback()
+            return
+        }
+        err = tx.Commit()
+    }()
+    
+    // First delete files (if we have a files table)
+    _, err = tx.Exec("DELETE FROM files WHERE project_id = ?", id)
+    if err != nil {
+        return err
+    }
+    
+    // Then delete the project
+    _, err = tx.Exec("DELETE FROM projects WHERE id = ?", id)
+    if err != nil {
+        return err
+    }
+    
+    return nil
+}
 
-		err := rows.Scan(&project.ID, &project.Name, &project.CreationDate)
-		if err != nil {
-			return nil, err
-		}
-
-		projects = append(projects, project)
-	}
-
-	return projects, nil
+func (m *ProjectModel) UpdateExternalID(id uuid.UUID, externalID string) error {
+    stmt := `
+        UPDATE projects
+        SET external_id = ?
+        WHERE id = ?
+    `
+    
+    _, err := m.DB.Exec(stmt, externalID, id)
+    return err
 }

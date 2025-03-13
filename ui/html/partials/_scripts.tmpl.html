@@ -502,7 +502,7 @@
       // WebSocket connection management
       connectWebSocket() {
         const chatID = window.location.pathname.split("/")[2];
-        this.ws = new WebSocket(`wss://localhost:4000/ws/${chatID}`);
+        this.ws = new WebSocket(`wss://localhost:4000/ws/chat/${chatID}`);
       
         this.ws.addEventListener('open', () => {
           console.log('WebSocket connection established');
