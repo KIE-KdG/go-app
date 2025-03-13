@@ -1,175 +1,221 @@
+// models/files.go
 package models
 
 import (
-    "database/sql"
-    "errors"
-    "time"
+	"database/sql"
+	"errors"
+	"time"
 
-    "github.com/google/uuid"
+	"github.com/google/uuid"
 )
 
-// File represents a document uploaded to the system
+// File represents a document in the system
 type File struct {
-    ID              uuid.UUID
-    Name            string
-    Description     string
-    FilePath        string
-    MimeType        string
-    Size            int64
-    Role            string
-    StorageLocation string
-    ProjectID       uuid.UUID
-    UserID          uuid.UUID
-    UploadedAt      time.Time
-    ProcessedAt     sql.NullTime
-    Status          string
+	ID              uuid.UUID
+	Name            string
+	Description     string
+	FilePath        string
+	MimeType        string
+	Size            int64
+	Role            string
+	StorageLocation string
+	ProjectID       uuid.UUID
+	UserID          uuid.UUID
+	UploadedAt      time.Time
+	ProcessedAt     sql.NullTime
+	Status          string
 }
 
 type FileModel struct {
-    DB *sql.DB
+	DB *sql.DB
 }
 
-// Insert adds a new file record to the database
+func NewFileModel(db *sql.DB) *FileModel {
+	return &FileModel{DB: db}
+}
+
 func (m *FileModel) Insert(file *File) error {
-    // If no ID is provided, generate one
-    if file.ID == uuid.Nil {
-        file.ID = uuid.New()
-    }
+	// Generate a new UUID if not provided
+	if file.ID == uuid.Nil {
+		file.ID = uuid.New()
+	}
 
-    stmt := `
-        INSERT INTO files (
-            id, name, description, file_path, mime_type, size, 
-            role, storage_location, project_id, user_id, 
-            uploaded_at, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
-    `
+	// Insert into files table
+	stmt := `
+		INSERT INTO files (
+			id, name, description, file_path, mime_type, size, 
+			role, storage_location, uploaded_at, status, owner_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10)
+		RETURNING id
+	`
 
-    _, err := m.DB.Exec(
-        stmt,
-        file.ID,
-        file.Name,
-        file.Description,
-        file.FilePath,
-        file.MimeType,
-        file.Size,
-        file.Role,
-        file.StorageLocation,
-        file.ProjectID,
-        file.UserID,
-        file.Status,
-    )
+	var id uuid.UUID
+	err := m.DB.QueryRow(
+		stmt,
+		file.ID,
+		file.Name,
+		file.Description,
+		file.FilePath,
+		file.MimeType,
+		file.Size,
+		file.Role,
+		file.StorageLocation,
+		file.Status,
+		file.UserID,
+	).Scan(&id)
 
-    return err
+	if err != nil {
+		return err
+	}
+
+	// Link to project if ProjectID is provided
+	if file.ProjectID != uuid.Nil {
+		linkStmt := `
+			INSERT INTO files_projects (file_id, project_id)
+			VALUES ($1, $2)
+			ON CONFLICT DO NOTHING
+		`
+		_, err = m.DB.Exec(linkStmt, id, file.ProjectID)
+		if err != nil {
+			// Log but don't fail on linking error
+			return err
+		}
+	}
+
+	return nil
 }
 
-// Get retrieves a file by its ID
-func (m *FileModel) Get(id uuid.UUID) (*File, error) {
-    stmt := `
-        SELECT id, name, description, file_path, mime_type, size,
-               role, storage_location, project_id, user_id,
-               uploaded_at, processed_at, status
-        FROM files
-        WHERE id = ?
-    `
+func (m *FileModel) GetByID(id uuid.UUID) (*File, error) {
+	stmt := `
+		SELECT f.id, f.name, f.description, f.file_path, f.mime_type, f.size,
+			   f.role, f.storage_location, f.uploaded_at, f.processed_at, f.status, f.owner_id
+		FROM files f
+		WHERE f.id = $1
+	`
 
-    var file File
-    err := m.DB.QueryRow(stmt, id).Scan(
-        &file.ID,
-        &file.Name,
-        &file.Description,
-        &file.FilePath,
-        &file.MimeType,
-        &file.Size,
-        &file.Role,
-        &file.StorageLocation,
-        &file.ProjectID,
-        &file.UserID,
-        &file.UploadedAt,
-        &file.ProcessedAt,
-        &file.Status,
-    )
+	var file File
+	var description, filePath sql.NullString
+	
+	err := m.DB.QueryRow(stmt, id).Scan(
+		&file.ID,
+		&file.Name,
+		&description,
+		&filePath,
+		&file.MimeType,
+		&file.Size,
+		&file.Role,
+		&file.StorageLocation,
+		&file.UploadedAt,
+		&file.ProcessedAt,
+		&file.Status,
+		&file.UserID,
+	)
 
-    if err != nil {
-        if errors.Is(err, sql.ErrNoRows) {
-            return nil, ErrNoRecord
-        }
-        return nil, err
-    }
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNoRecord
+		}
+		return nil, err
+	}
 
-    return &file, nil
+	if description.Valid {
+		file.Description = description.String
+	}
+	
+	if filePath.Valid {
+		file.FilePath = filePath.String
+	}
+
+	// Get ProjectID from the many-to-many relationship
+	projectStmt := `
+		SELECT project_id FROM files_projects WHERE file_id = $1 LIMIT 1
+	`
+	err = m.DB.QueryRow(projectStmt, id).Scan(&file.ProjectID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	return &file, nil
 }
 
-// GetByProject retrieves all files for a specific project
 func (m *FileModel) GetByProject(projectID uuid.UUID) ([]*File, error) {
-    stmt := `
-        SELECT id, name, description, file_path, mime_type, size,
-               role, storage_location, project_id, user_id,
-               uploaded_at, processed_at, status
-        FROM files
-        WHERE project_id = ?
-        ORDER BY uploaded_at DESC
-    `
+	stmt := `
+		SELECT f.id, f.name, f.description, f.file_path, f.mime_type, f.size,
+			   f.role, f.storage_location, f.uploaded_at, f.processed_at, f.status, f.owner_id
+		FROM files f
+		JOIN files_projects fp ON f.id = fp.file_id
+		WHERE fp.project_id = $1
+		ORDER BY f.uploaded_at DESC
+	`
 
-    rows, err := m.DB.Query(stmt, projectID)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
+	rows, err := m.DB.Query(stmt, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-    files := []*File{}
+	files := []*File{}
+	for rows.Next() {
+		var file File
+		var description, filePath sql.NullString
+		
+		err := rows.Scan(
+			&file.ID,
+			&file.Name,
+			&description,
+			&filePath,
+			&file.MimeType,
+			&file.Size,
+			&file.Role,
+			&file.StorageLocation,
+			&file.UploadedAt,
+			&file.ProcessedAt,
+			&file.Status,
+			&file.UserID,
+		)
+		if err != nil {
+			return nil, err
+		}
 
-    for rows.Next() {
-        var file File
-        err := rows.Scan(
-            &file.ID,
-            &file.Name,
-            &file.Description,
-            &file.FilePath,
-            &file.MimeType,
-            &file.Size,
-            &file.Role,
-            &file.StorageLocation,
-            &file.ProjectID,
-            &file.UserID,
-            &file.UploadedAt,
-            &file.ProcessedAt,
-            &file.Status,
-        )
-        if err != nil {
-            return nil, err
-        }
+		if description.Valid {
+			file.Description = description.String
+		}
+		
+		if filePath.Valid {
+			file.FilePath = filePath.String
+		}
 
-        files = append(files, &file)
-    }
+		file.ProjectID = projectID
+		files = append(files, &file)
+	}
 
-    if err = rows.Err(); err != nil {
-        return nil, err
-    }
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
 
-    return files, nil
+	return files, nil
 }
 
-// UpdateStatus updates the status of a file
 func (m *FileModel) UpdateStatus(id uuid.UUID, status string) error {
-    var stmt string
-    var args []interface{}
+	var stmt string
+	var args []interface{}
 
-    if status == "processed" {
-        stmt = `
-            UPDATE files
-            SET status = ?, processed_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `
-        args = []interface{}{status, id}
-    } else {
-        stmt = `
-            UPDATE files
-            SET status = ?
-            WHERE id = ?
-        `
-        args = []interface{}{status, id}
-    }
+	if status == "processed" {
+		stmt = `
+			UPDATE files
+			SET status = $1, processed_at = NOW()
+			WHERE id = $2
+		`
+		args = []interface{}{status, id}
+	} else {
+		stmt = `
+			UPDATE files
+			SET status = $1
+			WHERE id = $2
+		`
+		args = []interface{}{status, id}
+	}
 
-    _, err := m.DB.Exec(stmt, args...)
-    return err
+	_, err := m.DB.Exec(stmt, args...)
+	return err
 }
