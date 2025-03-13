@@ -78,6 +78,15 @@
                 }, 300);
               }
             });
+            
+            // Add a watcher for mapVisible changes (new code)
+            this.$watch('mapVisible', (visible) => {
+              if (visible && this.mapInstance) {
+                setTimeout(() => {
+                  this.mapInstance.invalidateSize();
+                }, 300);
+              }
+            });
           }, 200);
         });
       },
@@ -631,7 +640,7 @@
           console.error('Error parsing JSON:', event.data, e);
           return;
         }
-  
+      
         // Handle interruption acknowledgment
         if (data.interrupted) {
           console.log("Server acknowledged interruption");
@@ -653,7 +662,7 @@
           
           return;
         }
-  
+      
         // Create response object if it doesn't exist yet
         if (!this.currentResponse) {
           this.messages.push({
@@ -664,12 +673,12 @@
           });
           this.currentResponse = this.messages[this.messages.length - 1];
         }
-  
+      
         // Handle status updates
         if (data.status && data.status.trim()) {
           this.currentResponse.statusUpdates.push(data.status.trim());
         }
-  
+      
         // Handle error messages
         if (data.error) {
           this.currentResponse.statusUpdates.push(`Error: ${data.error}`);
@@ -678,7 +687,7 @@
           this.currentResponse = null;
           return;
         }
-  
+      
         // Handle final responses with content
         if (data.answer || data.response) {
           const responseText = data.answer || data.response;
@@ -691,9 +700,10 @@
             this.responseStartTime = null;
           }
         }
-  
-        // Process GeoJSON data if present
-        if (data.geoJSON) {
+      
+        // Process GeoJSON data if present AND not already present
+        // This is the key change - only set geoJSON if it's not already set
+        if (data.geoJSON && !this.currentResponse.geoJSON) {
           console.log("Received GeoJSON data");
           
           // Store the GeoJSON with the message
@@ -709,13 +719,12 @@
           this.isProcessing = false;
           this.currentResponse = null;
         }
-  
+      
         // Scroll to the latest message
         this.$nextTick(() => {
           this.scrollToBottom();
         });
       },
-  
       // UI Helper functions
       scrollToBottom() {
         const chatMessages = document.getElementById('chatMessages');
