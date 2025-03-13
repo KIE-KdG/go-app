@@ -75,13 +75,13 @@ func createSchema(db *sql.DB) error {
 	// Create users table
 	if _, err = tx.Exec(`
 	CREATE TABLE users (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL,
-		email TEXT NOT NULL UNIQUE,
-		hashed_password TEXT NOT NULL,
-		created DATETIME NOT NULL
+			id BLOB PRIMARY KEY DEFAULT (uuid_blob(uuid())),
+			name TEXT NOT NULL,
+			email TEXT NOT NULL UNIQUE,
+			hashed_password TEXT NOT NULL,
+			created DATETIME NOT NULL
 	);`); err != nil {
-		return err
+			return err
 	}
 
 	// Create sessions table
@@ -103,13 +103,13 @@ func createSchema(db *sql.DB) error {
 	// Create chats table with UUID extension enabled
 	if _, err = tx.Exec(`
 	CREATE TABLE chats (
-		id BLOB PRIMARY KEY DEFAULT (uuid_blob(uuid())),
-		user_id INTEGER NOT NULL,
-		created TIMESTAMP NOT NULL,
-		last_activity TIMESTAMP NOT NULL,
-		FOREIGN KEY (user_id) REFERENCES users(id)
+			id BLOB PRIMARY KEY DEFAULT (uuid_blob(uuid())),
+			user_id BLOB NOT NULL,
+			created TIMESTAMP NOT NULL,
+			last_activity TIMESTAMP NOT NULL,
+			FOREIGN KEY (user_id) REFERENCES users(id)
 	);`); err != nil {
-		return err
+			return err
 	}
 
 	// Create chats indices

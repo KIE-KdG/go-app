@@ -10,7 +10,7 @@ import (
 // Chat represents a conversation between users
 type Chat struct {
 	ID          uuid.UUID
-	UserID      int
+	UserID      uuid.UUID
 	Messages    []Message
 	Created     time.Time
 	LastActivity time.Time
@@ -22,23 +22,23 @@ type ChatModel struct {
 }
 
 // Insert creates a new chat for a user
-func (m *ChatModel) Insert(userID int) (uuid.UUID, error) {
+func (m *ChatModel) Insert(userID uuid.UUID) (uuid.UUID, error) {
 	chatID := uuid.New()
 
 	stmt := `
-		INSERT INTO chats (id, user_id, created, last_activity)
-		VALUES (?, ?, ?, ?)
+			INSERT INTO chats (id, user_id, created, last_activity)
+			VALUES (?, ?, ?, ?)
 	`
 	_, err := m.DB.Exec(stmt, chatID, userID, time.Now(), time.Now())
 	if err != nil {
-		return uuid.Nil, err
+			return uuid.Nil, err
 	}
 
 	return chatID, nil
 }
 
 // RetrieveByUserId gets all chats for a specific user
-func (m *ChatModel) RetrieveByUserId(userId int) ([]*Chat, error) {
+func (m *ChatModel) RetrieveByUserId(userId uuid.UUID) ([]*Chat, error) {
 	stmt := `
 		SELECT id, user_id, created, last_activity
 		FROM chats

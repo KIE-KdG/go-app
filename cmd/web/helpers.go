@@ -88,10 +88,14 @@ func (app *application) isAuthenticated(r *http.Request) bool {
 	return app.sessionManager.Exists(r.Context(), "authenticatedUserID")
 }
 
-func (app *application) userIdFromSession(r *http.Request) int {
-	return app.sessionManager.GetInt(r.Context(), "authenticatedUserID")
+func (app *application) userIdFromSession(r *http.Request) uuid.UUID {
+	uuidStr := app.sessionManager.GetString(r.Context(), "authenticatedUserID")
+	id, err := uuid.Parse(uuidStr)
+	if err != nil {
+			return uuid.Nil
+	}
+	return id
 }
-
 // writeJSON encodes an interface to a JSON response
 func (app *application) writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	// Set the Content-Type header
