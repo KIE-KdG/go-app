@@ -523,151 +523,8 @@
         });
       
         this.ws.addEventListener('message', (event) => {
-          let data = {};
-          try {
-            data = JSON.parse(event.data);
-            console.log("Received WebSocket data:", data);
-          } catch (e) {
-            console.error('Error parsing JSON:', event.data, e);
-            return;
-          }
-      
-          // Handle possible interruption acknowledgment
-          if (data.interrupted) {
-            console.log("Server acknowledged interruption");
-            this.isProcessing = false;
-            
-            if (this.currentResponse) {
-              if (!this.currentResponse.answer) {
-                this.currentResponse.answer = "*Generation was interrupted.*";
-              }
-              
-              if (this.responseStartTime) {
-                const responseTime = new Date() - this.responseStartTime;
-                this.currentResponse.responseTime = this.formatResponseTime(responseTime) + " (interrupted)";
-                this.responseStartTime = null;
-              }
-              
-              this.currentResponse = null;
-            }
-            
-            return;
-          }
-      
-          // Create response object if it doesn't exist yet
-          if (!this.currentResponse) {
-            this.messages.push({
-              sender: 'AI',
-              statusUpdates: [],
-              answer: '',
-              geoJSON: null,
-              showMap: false // Default to hidden map
-            });
-            this.currentResponse = this.messages[this.messages.length - 1];
-          }
-      
-          // Handle status updates
-          if (data.status) {
-            this.currentResponse.statusUpdates.push(data.status.trim());
-          }
-      
-          // Handle answer data (look for both answer and response fields)
-          if (data.answer || data.response) {
-            const responseText = data.answer || data.response;
-            this.currentResponse.answer = responseText;
-          }
-      
-          // Handle GeoJSON data with strict validation
-          if (data.geoJSON) {
-            console.log("Received GeoJSON data type:", typeof data.geoJSON);
-            
-            let parsedGeoJSON = null;
-            let isValidGeoJSON = false;
-            
-            // If it's a string, parse it
-            if (typeof data.geoJSON === 'string') {
-              try {
-                parsedGeoJSON = JSON.parse(data.geoJSON);
-                console.log("Parsed GeoJSON from string");
-              } catch (e) {
-                console.error("Failed to parse GeoJSON string:", e);
-              }
-            } else if (typeof data.geoJSON === 'object' && data.geoJSON !== null) {
-              // If it's already an object, use it directly
-              parsedGeoJSON = data.geoJSON;
-              console.log("Using GeoJSON object directly");
-            }
-            
-            // Strict validation of the GeoJSON
-            if (parsedGeoJSON && parsedGeoJSON.type) {
-              // For FeatureCollection, ensure it has features
-              if (parsedGeoJSON.type === 'FeatureCollection') {
-                if (parsedGeoJSON.features && Array.isArray(parsedGeoJSON.features) && parsedGeoJSON.features.length > 0) {
-                  isValidGeoJSON = true;
-                  console.log("Valid FeatureCollection with", parsedGeoJSON.features.length, "features");
-                } else {
-                  console.error("Invalid FeatureCollection: missing or empty features array");
-                }
-              } 
-              // For Feature, ensure it has geometry
-              else if (parsedGeoJSON.type === 'Feature') {
-                if (parsedGeoJSON.geometry && parsedGeoJSON.geometry.type) {
-                  isValidGeoJSON = true;
-                  console.log("Valid Feature with geometry type:", parsedGeoJSON.geometry.type);
-                } else {
-                  console.error("Invalid Feature: missing or invalid geometry");
-                }
-              }
-              // For direct geometry types
-              else if (['Point', 'LineString', 'Polygon', 'MultiPoint', 'MultiLineString', 'MultiPolygon', 'GeometryCollection'].includes(parsedGeoJSON.type)) {
-                if ((parsedGeoJSON.coordinates && Array.isArray(parsedGeoJSON.coordinates)) || 
-                    (parsedGeoJSON.type === 'GeometryCollection' && parsedGeoJSON.geometries)) {
-                  isValidGeoJSON = true;
-                  console.log("Valid geometry of type:", parsedGeoJSON.type);
-                } else {
-                  console.error("Invalid geometry: missing coordinates or geometries");
-                }
-              } else {
-                console.error("Unknown GeoJSON type:", parsedGeoJSON.type);
-              }
-            } else {
-              console.error("Invalid GeoJSON structure:", parsedGeoJSON);
-            }
-            
-            // Only store and flag valid GeoJSON
-            if (isValidGeoJSON) {
-              // Store the GeoJSON in the current response
-              this.currentResponse.geoJSON = parsedGeoJSON;
-              this.currentResponse.showMap = false; // Default to hidden map initially
-              
-              // Set flag indicating maps are available
-              this.hasMap = true;
-              console.log("Valid GeoJSON stored in message, map button will be shown");
-            } else {
-              console.error("GeoJSON validation failed, not storing or displaying map");
-              // Make sure we don't have invalid GeoJSON stored
-              this.currentResponse.geoJSON = null;
-            }
-          }
-      
-          // Finalize the response if we have answer or GeoJSON
-          if (data.answer || data.response || data.geoJSON) {
-            // Calculate response time
-            if (this.responseStartTime) {
-              const responseTime = new Date() - this.responseStartTime;
-              this.currentResponse.responseTime = this.formatResponseTime(responseTime);
-              this.responseStartTime = null;
-            }
-            
-            this.currentResponse = null;
-            this.isProcessing = false;
-          }
-      
-          this.$nextTick(() => {
-            this.scrollToBottom();
-          });
+          this.handleWebSocketMessage(event);
         });
-      
         this.ws.addEventListener('close', (event) => {
           console.log('WebSocket connection closed', event);
       
@@ -802,6 +659,185 @@
           const newHeight = Math.min(Math.max(textarea.scrollHeight, 60), 200);
           textarea.style.height = `${newHeight}px`;
         }
+      },
+      // Function to request dummy GeoJSON data
+      requestDummyGeoJSON() {
+        // Don't allow request if we're already processing something
+        if (this.isProcessing) return;
+        
+        // Check WebSocket state
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+          console.error('WebSocket is not open');
+          // Try to reconnect
+          if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+          }
+          this.connectWebSocket();
+          return;
+        }
+        
+        // Set processing state
+        this.isProcessing = true;
+        this.responseStartTime = new Date();
+        
+        // Push a new message to show to the user
+        this.messages.push({
+          sender: 'AI',
+          statusUpdates: ['Requesting map data...'],
+          answer: '',
+          geoJSON: null,
+          showMap: false
+        });
+        
+        this.currentResponse = this.messages[this.messages.length - 1];
+        
+        // Send request for dummy GeoJSON
+        this.ws.send(JSON.stringify({
+          getDummyGeoJSON: true
+        }));
+        
+        // Scroll to the new message
+        this.$nextTick(() => {
+          this.scrollToBottom();
+        });
+      },
+      handleWebSocketMessage(event) {
+        let data = {};
+        try {
+          data = JSON.parse(event.data);
+          console.log("Received WebSocket data:", data);
+        } catch (e) {
+          console.error('Error parsing JSON:', event.data, e);
+          return;
+        }
+  
+        // Handle interruption acknowledgment
+        if (data.interrupted) {
+          console.log("Server acknowledged interruption");
+          this.isProcessing = false;
+          
+          if (this.currentResponse) {
+            if (!this.currentResponse.answer) {
+              this.currentResponse.answer = "*Generation was interrupted.*";
+            }
+            
+            if (this.responseStartTime) {
+              const responseTime = new Date() - this.responseStartTime;
+              this.currentResponse.responseTime = this.formatResponseTime(responseTime) + " (interrupted)";
+              this.responseStartTime = null;
+            }
+            
+            this.currentResponse = null;
+          }
+          
+          return;
+        }
+  
+        // Create response object if it doesn't exist yet
+        if (!this.currentResponse) {
+          this.messages.push({
+            sender: 'AI',
+            statusUpdates: [],
+            answer: '',
+            geoJSON: null,
+            showMap: false
+          });
+          this.currentResponse = this.messages[this.messages.length - 1];
+        }
+  
+        // Handle status updates
+        if (data.status) {
+          this.currentResponse.statusUpdates.push(data.status.trim());
+        }
+  
+        // Handle error messages
+        if (data.error) {
+          this.currentResponse.statusUpdates.push(`Error: ${data.error}`);
+          this.currentResponse.answer = this.currentResponse.answer || `*An error occurred: ${data.error}*`;
+          this.isProcessing = false;
+          this.currentResponse = null;
+          return;
+        }
+  
+        // Handle special GeoJSON response
+        if (data.geoJSONResponse) {
+          console.log("Received dedicated GeoJSON response");
+          
+          // Process GeoJSON if present
+          if (data.geoJSON) {
+            let parsedGeoJSON = null;
+            
+            // If it's a string, parse it
+            if (typeof data.geoJSON === 'string') {
+              try {
+                parsedGeoJSON = JSON.parse(data.geoJSON);
+                console.log("Parsed GeoJSON from string");
+              } catch (e) {
+                console.error("Failed to parse GeoJSON string:", e);
+              }
+            } else if (typeof data.geoJSON === 'object' && data.geoJSON !== null) {
+              // If it's already an object, use it directly
+              parsedGeoJSON = data.geoJSON;
+              console.log("Using GeoJSON object directly");
+            }
+            
+            // If we have valid GeoJSON, store it and show the map
+            if (parsedGeoJSON) {
+              this.currentResponse.geoJSON = parsedGeoJSON;
+              this.currentResponse.showMap = true; // Auto-show map when requested
+              this.hasMap = true; // Enable map panel
+              
+              // If no answer text yet, add a default message
+              if (!this.currentResponse.answer) {
+                this.currentResponse.answer = "Map data loaded successfully.";
+              }
+              
+              // Initialize the map after a short delay
+              this.$nextTick(() => {
+                const mapIndex = this.messages.indexOf(this.currentResponse);
+                if (mapIndex >= 0) {
+                  setTimeout(() => {
+                    this.initInlineMap('map-' + mapIndex, parsedGeoJSON);
+                  }, 300);
+                }
+              });
+            } else {
+              console.error("GeoJSON validation failed");
+              this.currentResponse.answer = "Failed to load map data. The GeoJSON format was invalid.";
+            }
+          }
+          
+          // Calculate response time
+          if (this.responseStartTime) {
+            const responseTime = new Date() - this.responseStartTime;
+            this.currentResponse.responseTime = this.formatResponseTime(responseTime);
+            this.responseStartTime = null;
+          }
+          
+          this.currentResponse = null;
+          this.isProcessing = false;
+          return;
+        }
+  
+        // Handle regular text responses
+        if (data.answer || data.response) {
+          const responseText = data.answer || data.response;
+          this.currentResponse.answer = responseText;
+          
+          // Calculate response time
+          if (this.responseStartTime) {
+            const responseTime = new Date() - this.responseStartTime;
+            this.currentResponse.responseTime = this.formatResponseTime(responseTime);
+            this.responseStartTime = null;
+          }
+          
+          this.currentResponse = null;
+          this.isProcessing = false;
+        }
+  
+        this.$nextTick(() => {
+          this.scrollToBottom();
+        });
       }
     };
   }
