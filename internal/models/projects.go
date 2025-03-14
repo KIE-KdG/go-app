@@ -60,8 +60,7 @@ func (m *ProjectModel) Insert(name, description string, userID uuid.UUID) (uuid.
 
 func (m *ProjectModel) Get(id uuid.UUID) (*Project, error) {
 	stmt := `
-        SELECT p.id, p.name, p.description, p.user_id, p.external_id, 
-               p.created, p.updated,
+        SELECT p.id, p.name,
                (SELECT COUNT(*) FROM files_projects fp WHERE fp.project_id = p.id) AS document_count
         FROM projects p
         WHERE p.id = $1
@@ -73,11 +72,6 @@ func (m *ProjectModel) Get(id uuid.UUID) (*Project, error) {
 	err := m.DB.QueryRow(stmt, id).Scan(
 		&project.ID,
 		&project.Name,
-		&project.Description,
-		&project.UserID,
-		&externalID,
-		&project.Created,
-		&project.Updated,
 		&project.DocumentCount,
 	)
 	

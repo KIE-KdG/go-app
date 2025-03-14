@@ -1,143 +1,139 @@
 {{define "title"}}Admin{{end}}
 {{define "main"}}
-<div class="container mx-auto px-4 py-8">
-  <h1 class="text-2xl font-bold mb-6">Document Upload</h1>
-
-  <!-- Add to admin.tmpl.html -->
-  {{if not .Projects}}
-  <div class="alert alert-info mb-4">
-    <p>You need to create a project before uploading documents.</p>
-    <a href="/projects" class="btn btn-primary mt-2">Go to Projects</a>
+<div class="flex">
+  <div class="container mx-auto px-4 py-8">
+    {{template "projects" .}}
   </div>
-  {{end}}
+  <div class="container mx-auto px-4 py-8">
+    <h1 class="text-2xl font-bold mb-6">Document Upload</h1>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <!-- Upload Form -->
+      <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title">Upload Document</h2>
+          <p class="text-sm text-base-content/70 mb-4">Upload documents for RAG processing.</p>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-    <!-- Upload Form -->
-    <div class="card bg-base-100 shadow-xl">
-      <div class="card-body">
-        <h2 class="card-title">Upload Document</h2>
-        <p class="text-sm text-base-content/70 mb-4">Upload documents for RAG processing.</p>
+          <form id="uploadForm" enctype="multipart/form-data" class="space-y-4">
+            <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
 
-        <form id="uploadForm" enctype="multipart/form-data" class="space-y-4">
-          <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
+            <!-- Project Selection -->
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Project</span>
+              </label>
+              <select id="projectSelect" name="project_id" class="select select-bordered w-full" required>
+                <option value="">Select a project</option>
+                {{range .Projects}}
+                <option value="{{.ID}}">{{.Name}}</option>
+                {{end}}
+              </select>
+            </div>
 
-          <!-- Project Selection -->
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Project</span>
-            </label>
-            <select id="projectSelect" name="project_id" class="select select-bordered w-full" required>
-              <option value="">Select a project</option>
-              {{range .Projects}}
-              <option value="{{.ID}}">{{.Name}}</option>
-              {{end}}
-            </select>
-          </div>
+            <!-- File Selection -->
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Document</span>
+              </label>
+              <input type="file" name="document" id="documentInput" required
+                class="file-input file-input-bordered w-full" />
+            </div>
 
-          <!-- File Selection -->
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Document</span>
-            </label>
-            <input type="file" name="document" id="documentInput" required
-              class="file-input file-input-bordered w-full" />
-          </div>
+            <!-- File Role -->
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Document Role</span>
+              </label>
+              <select id="roleSelect" name="role" class="select select-bordered w-full" required>
+                <option value="table_explanation">Table Explenation</option>
+                <option value="column_explanation">Column Explenation</option>
+                <option value="informational">Informational</option>
+              </select>
+            </div>
 
-          <!-- File Role -->
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Document Role</span>
-            </label>
-            <select id="roleSelect" name="role" class="select select-bordered w-full" required>
-              <option value="table_explanation">Table Explenation</option>
-              <option value="column_explanation">Column Explenation</option>
-              <option value="informational">Informational</option>
-            </select>
-          </div>
+            <!-- Storage Location -->
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Storage Location</span>
+              </label>
+              <select id="storageSelect" name="storage_location" class="select select-bordered w-full" required>
+                <option value="local">Local Storage</option>
+                <option value="S3">S3 Storage</option>
+              </select>
+            </div>
 
-          <!-- Storage Location -->
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Storage Location</span>
-            </label>
-            <select id="storageSelect" name="storage_location" class="select select-bordered w-full" required>
-              <option value="local">Local Storage</option>
-              <option value="S3">S3 Storage</option>
-            </select>
-          </div>
+            <!-- Chunking Options -->
+            <div class="form-control">
+              <label class="label cursor-pointer justify-start gap-2">
+                <input type="checkbox" id="chunkAfterUpload" name="chunk_after_upload" class="checkbox" />
+                <span class="label-text">Process document after upload</span>
+              </label>
+            </div>
 
-          <!-- Chunking Options -->
-          <div class="form-control">
-            <label class="label cursor-pointer justify-start gap-2">
-              <input type="checkbox" id="chunkAfterUpload" name="chunk_after_upload" class="checkbox" />
-              <span class="label-text">Process document after upload</span>
-            </label>
-          </div>
-
-          <!-- Submit Button -->
-          <div class="card-actions justify-end">
-            <button type="submit" id="uploadButton" class="btn btn-primary">
-              Upload Document
-            </button>
-          </div>
-        </form>
+            <!-- Submit Button -->
+            <div class="card-actions justify-end">
+              <button type="submit" id="uploadButton" class="btn btn-primary">
+                Upload Document
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
 
-    <!-- Status Panel -->
-    <div class="card bg-base-100 shadow-xl">
-      <div class="card-body">
-        <h2 class="card-title">Upload Status</h2>
+      <!-- Status Panel -->
+      <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title">Upload Status</h2>
 
-        <!-- Progress Indicator -->
-        <div id="progressContainer" class="hidden">
-          <div class="flex items-center gap-2 mb-2">
-            <span id="progressStatus">Preparing upload...</span>
-            <div class="loading loading-spinner loading-sm"></div>
-          </div>
-          <progress id="uploadProgress" class="progress progress-primary w-full" value="0" max="100"></progress>
-          <p id="progressDetails" class="text-sm mt-1">0%</p>
-        </div>
-
-        <!-- Success/Error Messages -->
-        <div id="resultContainer" class="hidden my-4">
-          <div id="successMessage" class="alert alert-success hidden">
-            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none"
-              viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span id="successText"></span>
+          <!-- Progress Indicator -->
+          <div id="progressContainer" class="hidden">
+            <div class="flex items-center gap-2 mb-2">
+              <span id="progressStatus">Preparing upload...</span>
+              <div class="loading loading-spinner loading-sm"></div>
+            </div>
+            <progress id="uploadProgress" class="progress progress-primary w-full" value="0" max="100"></progress>
+            <p id="progressDetails" class="text-sm mt-1">0%</p>
           </div>
 
-          <div id="errorMessage" class="alert alert-error hidden">
-            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none"
-              viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span id="errorText"></span>
-          </div>
-        </div>
+          <!-- Success/Error Messages -->
+          <div id="resultContainer" class="hidden my-4">
+            <div id="successMessage" class="alert alert-success hidden">
+              <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span id="successText"></span>
+            </div>
 
-        <!-- Document Details After Upload -->
-        <div id="documentDetails" class="hidden mt-4">
-          <h3 class="font-bold text-lg mb-2">Document Details</h3>
-          <div class="overflow-x-auto">
-            <table class="table table-zebra w-full">
-              <tbody id="detailsTable">
-                <!-- Will be filled with document metadata -->
-              </tbody>
-            </table>
+            <div id="errorMessage" class="alert alert-error hidden">
+              <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span id="errorText"></span>
+            </div>
           </div>
-        </div>
 
-        <!-- Processing Status -->
-        <div id="processingContainer" class="hidden mt-4">
-          <h3 class="font-bold text-lg mb-2">Processing Status</h3>
-          <ul id="processingSteps" class="steps steps-vertical">
-            <!-- Will be filled with processing steps -->
-          </ul>
+          <!-- Document Details After Upload -->
+          <div id="documentDetails" class="hidden mt-4">
+            <h3 class="font-bold text-lg mb-2">Document Details</h3>
+            <div class="overflow-x-auto">
+              <table class="table table-zebra w-full">
+                <tbody id="detailsTable">
+                  <!-- Will be filled with document metadata -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Processing Status -->
+          <div id="processingContainer" class="hidden mt-4">
+            <h3 class="font-bold text-lg mb-2">Processing Status</h3>
+            <ul id="processingSteps" class="steps steps-vertical">
+              <!-- Will be filled with processing steps -->
+            </ul>
+          </div>
         </div>
       </div>
     </div>

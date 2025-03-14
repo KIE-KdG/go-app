@@ -36,14 +36,11 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodPost, "/user/logout", protected.ThenFunc(app.userLogoutPost))
 
 	//TODO add roles so that only admins can do following tasks
-	router.Handler(http.MethodGet, "/projects", protected.ThenFunc(app.projectsOverview))
-	router.Handler(http.MethodPost, "/project/create", protected.ThenFunc(app.projectCreate))
+	router.Handler(http.MethodGet, "/project/create", protected.ThenFunc(app.projectCreate))
+	router.Handler(http.MethodPost, "/project/create", protected.ThenFunc(app.projectCreatePost))
 	router.Handler(http.MethodGet, "/project/{id}", protected.ThenFunc(app.projectView))
-	router.Handler(http.MethodGet, "/admin/upload", protected.ThenFunc(app.adminUploadForm))
 
 	router.Handler(http.MethodGet, "/panel", protected.ThenFunc(app.adminPanel))
-	router.Handler(http.MethodPost, "/project/{id}/sync", protected.ThenFunc(app.syncProjectWithExternal))
-	//router.Handler(http.MethodPost, "/api/upload", protected.ThenFunc(app.uploadPost))
 	router.Handler(http.MethodGet, "/ws/upload", chatIDMiddleware(protected.ThenFunc(app.handleFileUpload)))
 	router.Handler(http.MethodGet, "/ws/process/{id}", chatIDMiddleware(protected.ThenFunc(app.handleDocumentProcessing)))
 

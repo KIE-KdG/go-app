@@ -39,15 +39,22 @@ type FileUploadResponse struct {
 }
 
 func (app *application) adminPanel(w http.ResponseWriter, r *http.Request) {
+	userID := app.userIdFromSession(r)
+	if userID == uuid.Nil {
+		app.clientError(w, http.StatusUnauthorized)
+		return
+	}
+	
 	data := app.newTemplateData(r)
 	data.Form = adminPanelForm{}
-	
-	// Fetch projects for the dropdown
-	projects, err := app.projects.GetAll()
+
+	// Fetch projects
+	projects, err := app.projects.GetByUserID(userID)
 	if err != nil {
 		app.serverError(w, err)
 		return
 	}
+	
 	data.Projects = projects
 	
 	app.render(w, http.StatusOK, "admin.tmpl.html", data)
