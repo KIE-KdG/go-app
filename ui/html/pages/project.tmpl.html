@@ -1,22 +1,10 @@
 {{define "title"}}Project: {{.Project.Name}}{{end}}
 {{define "main"}}
-{{if not .Project.ExternalID}}
-<form action="/project/{{.Project.ID}}/sync" method="post" class="inline">
-  <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
-  <button type="submit" class="btn btn-outline btn-warning">
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38" />
-    </svg>
-    Sync with External System
-  </button>
-</form>
-{{end}}
 <div class="container mx-auto px-4 py-8">
   <div class="flex justify-between items-center mb-6">
     <div>
       <div class="flex items-center gap-2">
-        <a href="/projects" class="btn btn-ghost btn-sm">
+        <a href="/panel" class="btn btn-ghost btn-sm">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M19 12H5M12 19l-7-7 7-7" />
@@ -25,23 +13,120 @@
         </a>
         <h1 class="text-2xl font-bold">{{.Project.Name}}</h1>
       </div>
-      <p class="text-base-content/70 mt-1">
-        {{if .Project.Description}}{{.Project.Description}}{{else}}No description provided{{end}}
-      </p>
     </div>
-    <a href="/admin/upload?project={{.Project.ID}}" class="btn btn-primary">
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-        <polyline points="17 8 12 3 7 8"></polyline>
-        <line x1="12" y1="3" x2="12" y2="15"></line>
-      </svg>
-      Upload Documents
-    </a>
+    <div>
+      <a href="/admin?project={{.Project.ID}}" class="btn btn-primary">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+        Upload Documents
+      </a>
+    </div>
+  </div>
+
+  <!-- Database Connection Section -->
+  <div class="card bg-base-100 shadow-xl mb-6">
+    <div class="card-body">
+      <h2 class="card-title">Database Connection</h2>
+
+      {{if .ProjectDatabase}}
+      <!-- Display existing database connection -->
+      <div class="stats shadow w-full mt-2">
+        <div class="stat">
+          <div class="stat-title">Database ID</div>
+          <div class="stat-value text-lg">{{.ProjectDatabase.ID}}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Database Type</div>
+          <div class="stat-value text-lg">{{.ProjectDatabase.DbType}}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Connection String</div>
+          <div class="stat-desc break-all">
+            <code class="bg-base-200 p-2 rounded block mt-1">{{.ProjectDatabase.ConnectionString}}</code>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 flex justify-end">
+        <button class="btn btn-sm btn-outline">Edit Connection</button>
+        <button class="btn btn-sm btn-error ml-2">Delete Connection</button>
+      </div>
+      {{else}}
+      <!-- No database connection exists -->
+      <div class="flex flex-col items-center justify-center p-8 bg-base-200 rounded-lg">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-4 opacity-50">
+          <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+        </svg>
+        <h3 class="text-lg font-medium mb-2">No Database Connection</h3>
+
+        {{if .HasDocuments}}
+        <!-- Show database setup option only if documents exist -->
+        <p class="text-base-content/70 text-center mb-4">Connect your project to a database to enable queries.</p>
+        
+        <form action="/project/db/setup" method="post" novalidate class="w-full max-w-md">
+          <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
+          <input type='hidden' name='project_id' value='{{.Project.ID}}'>
+
+          {{range .Form.NonFieldErrors}}
+          <div class='alert alert-error mb-4'>{{.}}</div>
+          {{end}}
+
+          <div class="space-y-4">
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Connection String</span>
+              </label>
+              <input type='text' name='connstring' value='{{with .Form}}{{.ConnectionString}}{{end}}' 
+                     class="input input-bordered w-full" placeholder="Connection String">
+              {{with .Form.FieldErrors.connstring}}
+              <label class='label'>
+                <span class='label-text-alt text-error'>{{.}}</span>
+              </label>
+              {{end}}
+            </div>
+
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Database Type</span>
+              </label>
+              <select name='dbtype' class="select select-bordered w-full">
+                <option value="" >Select Database Type</option>
+                <option value="postgres" >PostgreSQL</option>
+                <option value="mysql">MySQL</option>
+                <option value="sqlserver">SQL Server</option>
+              </select>
+              {{with .Form.FieldErrors.dbtype}}
+              <label class='label'>
+                <span class='label-text-alt text-error'>{{.}}</span>
+              </label>
+              {{end}}
+            </div>
+
+            <div class="card-actions justify-center mt-4">
+              <button type='submit' class="btn btn-primary w-full">Connect Database</button>
+            </div>
+          </div>
+        </form>
+        {{else}}
+        <!-- No documents yet, can't setup database -->
+        <p class="text-base-content/70 text-center mb-4">Upload at least one document before setting up a database
+          connection.</p>
+        <a href="/admin?project={{.Project.ID}}" class="btn btn-primary">Upload First Document</a>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
   </div>
 
   <!-- Project Info Card -->
-  <div class="stats shadow mb-6 w-full">
+  <div class="stats shadow-xl mb-6 w-full">
     <div class="stat">
       <div class="stat-title">Documents</div>
       <div class="stat-value">{{.Project.DocumentCount}}</div>
@@ -86,14 +171,14 @@
               <td>{{.Name}}</td>
               <td>{{.MimeType}}</td>
               <td>
-                <div class="{{roleBadgeClass .Role}}">
+                <div class="badge {{roleBadgeClass .Role}}">
                   {{.Role}}
                 </div>
               </td>
               <td>{{formatFileSize .Size}}</td>
               <td>{{humanDate .UploadedAt}}</td>
               <td>
-                <div class="{{statusBadgeClass .Status}}">
+                <div class="badge {{statusBadgeClass .Status}}">
                   {{.Status}}
                 </div>
               </td>
@@ -115,7 +200,7 @@
         </svg>
         <h3 class="text-lg font-medium mb-2">No Documents Yet</h3>
         <p class="text-base-content/70 text-center mb-4">Upload documents to use with the RAG system</p>
-        <a href="/admin/upload?project={{.Project.ID}}" class="btn btn-primary">Upload First Document</a>
+        <a href="/admin?project={{.Project.ID}}" class="btn btn-primary">Upload First Document</a>
       </div>
       {{end}}
     </div>

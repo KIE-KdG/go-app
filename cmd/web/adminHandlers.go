@@ -61,25 +61,26 @@ func (app *application) adminPanel(w http.ResponseWriter, r *http.Request) {
 }
 
 // WebSocket handler for file uploads
+// Replace the WebSocket handler for file uploads to handle multiple roles
 func (app *application) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	// Verify user is authenticated
 	if !app.isAuthenticated(r) {
-		app.clientError(w, http.StatusUnauthorized)
-		return
+			app.clientError(w, http.StatusUnauthorized)
+			return
 	}
 	
 	// Get user ID from session
 	userID := app.userIdFromSession(r)
 	if userID == uuid.Nil {
-		app.clientError(w, http.StatusUnauthorized)
-		return
+			app.clientError(w, http.StatusUnauthorized)
+			return
 	}
 	
 	// Upgrade HTTP connection to WebSocket
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		app.errorLog.Printf("WebSocket upgrade error: %v", err)
-		return
+			app.errorLog.Printf("WebSocket upgrade error: %v", err)
+			return
 	}
 	defer ws.Close()
 	
@@ -87,9 +88,9 @@ func (app *application) handleFileUpload(w http.ResponseWriter, r *http.Request)
 	otherServer := "ws://localhost" + app.chatPort.Port + "/ws/upload"
 	externalWS, _, err := websocket.DefaultDialer.Dial(otherServer, nil)
 	if err != nil {
-		app.errorLog.Printf("Failed to connect to external service: %v", err)
-		sendError(ws, "Failed to connect to document processing service")
-		return
+			app.errorLog.Printf("Failed to connect to external service: %v", err)
+			sendError(ws, "Failed to connect to document processing service")
+			return
 	}
 	defer externalWS.Close()
 	
@@ -98,27 +99,34 @@ func (app *application) handleFileUpload(w http.ResponseWriter, r *http.Request)
 	// First message should be metadata
 	_, metadata, err := ws.ReadMessage()
 	if err != nil {
-		app.errorLog.Printf("Error reading metadata: %v", err)
-		return
+			app.errorLog.Printf("Error reading metadata: %v", err)
+			return
 	}
 	
 	// Parse metadata
 	var fileMetadata FileUploadMetadata
 	if err := json.Unmarshal(metadata, &fileMetadata); err != nil {
-		app.errorLog.Printf("Invalid metadata format: %v", err)
-		sendError(ws, "Invalid metadata format")
-		return
+			app.errorLog.Printf("Invalid metadata format: %v", err)
+			sendError(ws, "Invalid metadata format")
+			return
 	}
 	
 	// Verify CSRF token
 	if !app.validateCSRFToken(r, fileMetadata.CSRFToken) {
-		app.errorLog.Printf("Invalid CSRF token")
-		sendError(ws, "Invalid CSRF token")
-		return
+			app.errorLog.Printf("Invalid CSRF token")
+			sendError(ws, "Invalid CSRF token")
+			return
 	}
 	
 	// Add the user ID to metadata
 	fileMetadata.OwnerID = userID.String()
+	
+	// Ensure we have at least one role selected
+	if len(fileMetadata.Roles) == 0 {
+			app.errorLog.Printf("No document roles selected")
+			sendError(ws, "At least one document role must be selected")
+			return
+	}
 	
 	// Remove CSRF token before forwarding (security measure)
 	fileMetadata.CSRFToken = ""

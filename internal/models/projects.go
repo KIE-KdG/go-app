@@ -67,7 +67,6 @@ func (m *ProjectModel) Get(id uuid.UUID) (*Project, error) {
     `
 	
 	var project Project
-	var externalID sql.NullString
 	
 	err := m.DB.QueryRow(stmt, id).Scan(
 		&project.ID,
@@ -80,10 +79,6 @@ func (m *ProjectModel) Get(id uuid.UUID) (*Project, error) {
 			return nil, ErrNoRecord
 		}
 		return nil, err
-	}
-	
-	if externalID.Valid {
-		project.ExternalID = externalID.String
 	}
 	
 	return &project, nil
@@ -108,7 +103,6 @@ func (m *ProjectModel) GetByUserID(userID uuid.UUID) ([]*Project, error) {
 	
 	for rows.Next() {
 		var project Project
-		var externalID sql.NullString
 		
 		err := rows.Scan(
 			&project.ID,
@@ -119,10 +113,6 @@ func (m *ProjectModel) GetByUserID(userID uuid.UUID) ([]*Project, error) {
 			return nil, err
 		}
 		
-		if externalID.Valid {
-			project.ExternalID = externalID.String
-		}
-		
 		projects = append(projects, &project)
 	}
 	
@@ -131,17 +121,6 @@ func (m *ProjectModel) GetByUserID(userID uuid.UUID) ([]*Project, error) {
 	}
 	
 	return projects, nil
-}
-
-func (m *ProjectModel) UpdateExternalID(id uuid.UUID, externalID string) error {
-	stmt := `
-        UPDATE projects
-        SET external_id = $1, updated = NOW()
-        WHERE id = $2
-    `
-	
-	_, err := m.DB.Exec(stmt, externalID, id)
-	return err
 }
 
 func (m *ProjectModel) GetAll() ([]*Project, error) {

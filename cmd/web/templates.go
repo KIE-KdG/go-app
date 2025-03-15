@@ -23,8 +23,9 @@ type templateData struct {
 	Localizer       *i18n.Localizer
 	Projects        []*models.Project
 	Project         *models.Project
-	SelectedProject *models.Project
+	ProjectDatabase *models.ProjectDatabase
 	Files           []*models.File
+	HasDocuments    bool
 }
 
 func humanDate(t time.Time) string {

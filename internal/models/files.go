@@ -140,12 +140,10 @@ func (m *FileModel) GetByID(id uuid.UUID) (*File, error) {
 
 func (m *FileModel) GetByProject(projectID uuid.UUID) ([]*File, error) {
 	stmt := `
-		SELECT f.id, f.name, f.description, f.file_path, f.mime_type, f.size,
-			   f.role, f.storage_location, f.uploaded_at, f.processed_at, f.status, f.owner_id
+		SELECT f.id, f.name, f.file_path, f.storage_location, f.owner_id
 		FROM files f
 		JOIN files_projects fp ON f.id = fp.file_id
 		WHERE fp.project_id = $1
-		ORDER BY f.uploaded_at DESC
 	`
 
 	rows, err := m.DB.Query(stmt, projectID)
@@ -162,15 +160,8 @@ func (m *FileModel) GetByProject(projectID uuid.UUID) ([]*File, error) {
 		err := rows.Scan(
 			&file.ID,
 			&file.Name,
-			&description,
 			&filePath,
-			&file.MimeType,
-			&file.Size,
-			&file.Role,
 			&file.StorageLocation,
-			&file.UploadedAt,
-			&file.ProcessedAt,
-			&file.Status,
 			&file.UserID,
 		)
 		if err != nil {

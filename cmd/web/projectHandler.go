@@ -1,6 +1,9 @@
 package main
 
 import (
+	"errors"
+	"fmt"
+	"kdg/be/lab/internal/models"
 	"kdg/be/lab/internal/validator"
 	"net/http"
 
@@ -9,7 +12,7 @@ import (
 )
 
 type projectCreateForm struct {
-	Name string `form:"name"`
+	Name                string `form:"name"`
 	validator.Validator `form:"-"`
 }
 
@@ -46,7 +49,7 @@ func (app *application) projectCreatePost(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_, err = app.externalAPI.CreateExternalProject(userID.String(), form.Name)
+	_, err = app.externalAPI.CreateExternalProject(userID, form.Name)
 	if err != nil {
 		app.errorLog.Printf("Failed to create project in external system: %v", err)
 		return
@@ -85,15 +88,107 @@ func (app *application) projectView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get files for this project
-	// files, err := app.files.GetByProject(projectID)
-	// if err != nil {
-	// 	app.serverError(w, err)
-	// 	return
-	// }
+	files, err := app.files.GetByProject(projectID)
+	if err != nil {
+		app.serverError(w, err)
+		return
+	}
+
+	// Get database for this project
+	// We'll handle the case where no database exists
+	var projectDatabase *models.ProjectDatabase
+	projectDatabase, err = app.projectDatabase.GetByProjectID(projectID)
+	if err != nil {
+		if !errors.Is(err, models.ErrNoRecord) {
+			// Only return a server error if it's not a "no record" error
+			app.serverError(w, err)
+			return
+		}
+		// If there's no database record, projectDatabase will be nil
+	}
 
 	data := app.newTemplateData(r)
 	data.Project = project
-
+	data.Files = files
+	data.ProjectDatabase = projectDatabase
+	data.HasDocuments = len(files) > 0 // Flag to indicate if documents exist
+	data.Form = databaseSetupForm{}
 
 	app.render(w, http.StatusOK, "project.tmpl.html", data)
+}
+
+type databaseSetupForm struct {
+	ProjectID           string `form:"project_id"`
+	ConnectionString    string `form:"connstring"`
+	DbType              string `form:"dbtype"`
+	validator.Validator `form:"-"`
+}
+
+// Handler for database connection setup
+func (app *application) projectDatabaseSetupPost(w http.ResponseWriter, r *http.Request) {
+	// Parse the form
+	var form databaseSetupForm
+	err := app.decodePostForm(r, &form)
+	if err != nil {
+		app.errorLog.Printf("Form decode error: %v", err)
+		app.clientError(w, http.StatusBadRequest)
+		return
+	}
+
+	// Validate form fields
+	form.CheckField(validator.NotBlank(form.ProjectID), "project_id", "Project ID is required")
+	form.CheckField(validator.NotBlank(form.ConnectionString), "connstring", "Connection string cannot be empty")
+	form.CheckField(validator.NotBlank(form.DbType), "dbtype", "Database type cannot be empty")
+
+	// Parse project ID
+	projectID, err := uuid.Parse(form.ProjectID)
+	if err != nil {
+		app.errorLog.Printf("Invalid project ID: %v", err)
+		form.AddNonFieldError("Invalid project ID")
+		app.renderFormErrors(w, r, form, "project.tmpl.html")
+		return
+	}
+
+	// If there are validation errors, re-render the form
+	if !form.Valid() {
+		// Get the project and files for the template
+		project, pErr := app.projects.Get(projectID)
+		if pErr != nil {
+			app.errorLog.Printf("Project not found: %v", pErr)
+			app.notFound(w)
+			return
+		}
+
+		files, fErr := app.files.GetByProject(projectID)
+		if fErr != nil {
+			app.errorLog.Printf("Error fetching files: %v", fErr)
+			app.serverError(w, fErr)
+			return
+		}
+
+		// Prepare template data
+		data := app.newTemplateData(r)
+		data.Project = project
+		data.Files = files
+		data.HasDocuments = len(files) > 0
+		data.Form = form // Include the form with errors
+
+		// Render the template
+		app.render(w, http.StatusUnprocessableEntity, "project.tmpl.html", data)
+		return
+	}
+
+	// All validation passed, create database connection
+	_, err = app.externalAPI.CreateProjectDatabase(projectID, form.ConnectionString, form.DbType)
+	if err != nil {
+		app.errorLog.Printf("Database connection creation error: %v", err)
+		app.serverError(w, err)
+		return
+	}
+
+	// Set success flash message
+	app.sessionManager.Put(r.Context(), "flash", "Database connection successfully created")
+
+	// Redirect back to the project page
+	http.Redirect(w, r, fmt.Sprintf("/project/view/%s", projectID), http.StatusSeeOther)
 }

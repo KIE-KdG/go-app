@@ -38,16 +38,29 @@
                 class="file-input file-input-bordered w-full" />
             </div>
 
-            <!-- File Role -->
+            <!-- Document Role(s) - Multiple selection with checkboxes -->
             <div class="form-control">
               <label class="label">
-                <span class="label-text">Document Role</span>
+                <span class="label-text">Document Role(s)</span>
+                <span class="label-text-alt text-error hidden" id="roleError">Select at least one role</span>
               </label>
-              <select id="roleSelect" name="role" class="select select-bordered w-full" required>
-                <option value="table_explanation">Table Explenation</option>
-                <option value="column_explanation">Column Explenation</option>
-                <option value="informational">Informational</option>
-              </select>
+              
+              <div class="bg-base-200 p-3 rounded space-y-2">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" name="role[]" value="table_explanation" class="checkbox role-checkbox" />
+                  <span>Table Explanation</span>
+                </label>
+                
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" name="role[]" value="column_explanation" class="checkbox role-checkbox" />
+                  <span>Column Explanation</span>
+                </label>
+                
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" name="role[]" value="informational" class="checkbox role-checkbox" />
+                  <span>Informational</span>
+                </label>
+              </div>
             </div>
 
             <!-- Storage Location -->
@@ -157,6 +170,8 @@
     const detailsTable = document.getElementById('detailsTable');
     const processingContainer = document.getElementById('processingContainer');
     const processingSteps = document.getElementById('processingSteps');
+    const roleCheckboxes = document.querySelectorAll('.role-checkbox');
+    const roleError = document.getElementById('roleError');
 
     uploadForm.addEventListener('submit', async function (e) {
       e.preventDefault();
@@ -172,9 +187,22 @@
       // Get form data
       const projectId = document.getElementById('projectSelect').value;
       const file = document.getElementById('documentInput').files[0];
-      const role = document.getElementById('roleSelect').value;
       const storageLocation = document.getElementById('storageSelect').value;
       const chunkAfterUpload = document.getElementById('chunkAfterUpload').checked;
+      
+      // Check for selected roles
+      const selectedRoles = Array.from(roleCheckboxes)
+        .filter(checkbox => checkbox.checked)
+        .map(checkbox => checkbox.value);
+      
+      // Validate at least one role is selected
+      if (selectedRoles.length === 0) {
+        roleError.classList.remove('hidden');
+        progressContainer.classList.add('hidden');
+        return;
+      } else {
+        roleError.classList.add('hidden');
+      }
 
       if (!projectId || !file) {
         showError('Please select a project and file');
@@ -195,7 +223,7 @@
           // First message: send file metadata
           const metadata = {
             name: file.name,
-            roles: [role],
+            roles: selectedRoles,
             storage_location: storageLocation,
             project_id: projectId,
             csrf_token: csrfToken
@@ -293,6 +321,15 @@
         console.error('Upload error:', error);
       }
     });
+    
+    // Hide error message when user selects a role
+    roleCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', function() {
+        if (this.checked) {
+          roleError.classList.add('hidden');
+        }
+      });
+    });
 
     // Helper function to format bytes
     function formatBytes(bytes) {
@@ -328,7 +365,7 @@
         { label: 'Document ID', value: metadata.id },
         { label: 'Name', value: metadata.name },
         { label: 'Project', value: metadata.project_id },
-        { label: 'Role', value: metadata.roles.join(', ') },
+        { label: 'Roles', value: metadata.roles.join(', ') },
         { label: 'Storage Location', value: metadata.storage_location },
         { label: 'Upload Date', value: new Date().toLocaleString() }
       ];
