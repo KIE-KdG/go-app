@@ -67,6 +67,35 @@ type SchemaExplenationResponse struct {
 	Description string    `json:"description"`
 }
 
+// DbConnectionRequestModel represents the database connection details
+type DbConnectionRequestModel struct {
+	SourceDbConn string `json:"source_db_conn"`
+	DbType       string `json:"db_type"`
+}
+
+// TableExplanationModel represents a table with its explanation
+type TableExplanationModel struct {
+	SchemaName  string `json:"schema_name"`
+	TableName   string `json:"table_name"`
+	Explanation string `json:"explanation"`
+}
+
+// SchemaExplanationRequest represents the request to create tables in a schema
+type SchemaExplanationRequest struct {
+	ConnModel    DbConnectionRequestModel `json:"conn_model"`
+	SchemaName   string                   `json:"schema_name"`
+	ProjectID    uuid.UUID                `json:"project_id"`
+	Explanations []TableExplanationModel  `json:"explanations"`
+}
+
+// TableExplanationResponse represents the response from creating tables
+type TableExplanationResponse struct {
+	SchemaName  string    `json:"schema_name"`
+	TableID     uuid.UUID `json:"table_id"`
+	TableName   string    `json:"table_name"`
+	Description string    `json:"description"`
+}
+
 // NewExternalAPIClient creates a new API client
 func NewExternalAPIClient(baseURL string) *ExternalAPIClient {
 	return &ExternalAPIClient{
@@ -179,4 +208,40 @@ func (c *ExternalAPIClient) GetDatabaseSchemas(dbID uuid.UUID) (*[]string, error
 	fmt.Printf("schemas found for DB: %s, %s", dbID, response)
 
 	return &response, nil
+}
+
+func (c *ExternalAPIClient) GetSchemaTables(schemaID string) ([]TableInfo, error) {
+	apiReq := APIRequest{
+		Method: http.MethodGet,
+		URL:    c.buildURL("/api/schemas/%s/tables-detailed", schemaID),
+	}
+
+	var response []TableInfo
+	err := c.sendAPIRequest(apiReq, &response)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching schema tables: %w", err)
+	}
+
+	return response, nil
+}
+
+// SaveSelectedTables sends selected tables and columns to the API
+func (c *ExternalAPIClient) SaveSelectedTables(projectID uuid.UUID, selectedTables []map[string]interface{}) error {
+	reqData := map[string]interface{}{
+		"project_id": projectID.String(),
+		"tables":     selectedTables,
+	}
+
+	apiReq := APIRequest{
+		Method:      http.MethodPost,
+		URL:         c.buildURL("/api/projects/%s/selected-tables", projectID),
+		RequestBody: reqData,
+	}
+
+	err := c.sendAPIRequest(apiReq, nil)
+	if err != nil {
+		return fmt.Errorf("error saving selected tables: %w", err)
+	}
+
+	return nil
 }

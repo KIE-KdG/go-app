@@ -35,6 +35,9 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodGet, "/ws/chat/:id", chatIDMiddleware(protected.ThenFunc(app.handleConnections)))
 	router.Handler(http.MethodPost, "/user/logout", protected.ThenFunc(app.userLogoutPost))
 
+	router.Handler(http.MethodGet, "/api/schema/:db_id/:schema_name/tables", protected.ThenFunc(app.getSchemaTablesAPI))
+	router.Handler(http.MethodPost, "/api/project/tables", protected.ThenFunc(app.saveProjectTables))
+
 	//TODO add roles so that only admins can do following tasks
 	router.Handler(http.MethodGet, "/project/create", protected.ThenFunc(app.projectCreate))
 	router.Handler(http.MethodPost, "/project/create", protected.ThenFunc(app.projectCreatePost))

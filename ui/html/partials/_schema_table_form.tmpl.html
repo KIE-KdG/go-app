@@ -12,7 +12,7 @@
 
             {{if .ProjectSchemas}}
 
-            <form action="/schema/create" method="POST" novalidate>
+            <form id="schemaForm" action="/schema/create" method="POST" novalidate>
                 <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
                 <input type='hidden' name='db_id' value='{{.ProjectDatabase.ID}}'>
                 <input type='hidden' name='project_id' value='{{.Project.ID}}'>
@@ -35,7 +35,7 @@
                         <span class="label-text-alt">Hold Ctrl/Cmd to select multiple schemas</span>
                     </label>
 
-                    <button type="submit" id="fetchTable" class="btn btn-primary w-full">Fetch Tables</button>
+                    <button type="submit" id="fetchTables" class="btn btn-primary w-full">Fetch Tables</button>
                 </div>
             </form>
 
@@ -49,29 +49,336 @@
         </div>
     </div>
 
-    <!-- Rest of the template remains unchanged -->
     <!-- Tables Selection Section -->
-    <div class="card bg-base-100 shadow-lg w-full" hidden>
+    <div id="tablesSection" class="card bg-base-100 shadow-lg w-full" style="display: none;">
         <div class="card-body">
             <h2 class="card-title text-lg font-medium mb-4">2. Select Tables and Columns</h2>
 
+            <!-- Loading indicator -->
+            <div id="tablesLoading" class="w-full flex justify-center items-center py-8">
+                <span class="loading loading-spinner loading-lg text-primary"></span>
+                <p class="ml-3">Loading tables...</p>
+            </div>
+
+            <!-- Error message area -->
+            <div id="tablesError" class="alert alert-error mb-4" style="display: none;"></div>
+
+            <!-- Search bar for tables -->
             <div class="mb-6">
                 <div class="form-control w-full">
                     <input type="text" placeholder="Search tables..." id="table-search"
-                           class="input input-bordered w-full"/>
+                        class="input input-bordered w-full"/>
                 </div>
             </div>
 
+            <!-- Tables container -->
             <div class="space-y-4" id="tables-container">
-                <!-- Table entries remain unchanged -->
-                <!-- ... -->
+                <!-- Table entries will be inserted here dynamically -->
             </div>
         </div>
     </div>
 
-    <!-- Submit Button Section -->
-    <div class="card-actions justify-end mt-4 mb-8">
-        <button type="submit" class="btn btn-primary btn-lg">Update data source</button>
+    <!-- Submit Button Section (for selected tables) -->
+    <div id="tableSubmitSection" class="card-actions justify-end mt-4 mb-8" style="display: none;">
+        <button type="button" id="updateDataSource" class="btn btn-primary btn-lg">Update data source</button>
     </div>
 </div>
+
+<!-- Table entry template to be cloned by JavaScript -->
+<template id="table-entry-template">
+    <div class="table-entry card bg-base-200 p-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <input type="checkbox" class="table-checkbox checkbox checkbox-primary" />
+                <div>
+                    <h3 class="table-name font-medium text-lg"></h3>
+                    <p class="table-description text-sm text-base-content/70"></p>
+                </div>
+            </div>
+            <button class="btn btn-sm btn-ghost toggle-columns-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" 
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            </button>
+        </div>
+        <div class="columns-list mt-3 hidden">
+            <div class="divider my-2"></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 columns-grid">
+                <!-- Column entries will be added here -->
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- Column entry template -->
+<template id="column-entry-template">
+    <div class="column-entry flex items-center space-x-2">
+        <input type="checkbox" class="column-checkbox checkbox checkbox-sm checkbox-secondary" />
+        <div>
+            <p class="column-name font-medium"></p>
+            <p class="column-type text-xs text-base-content/70"></p>
+        </div>
+    </div>
+</template>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const schemaForm = document.getElementById('schemaForm');
+    const tablesSection = document.getElementById('tablesSection');
+    const tablesLoading = document.getElementById('tablesLoading');
+    const tablesError = document.getElementById('tablesError');
+    const tablesContainer = document.getElementById('tables-container');
+    const tableSearch = document.getElementById('table-search');
+    const tableSubmitSection = document.getElementById('tableSubmitSection');
+    
+    // Schema form submission handling
+    if (schemaForm) {
+        schemaForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Show tables section and loading indicator
+            tablesSection.style.display = 'block';
+            tablesLoading.style.display = 'flex';
+            tablesError.style.display = 'none';
+            tablesContainer.innerHTML = '';
+            
+            // Get selected schemas
+            const schemaSelect = document.getElementById('schemaName');
+            const selectedSchemas = Array.from(schemaSelect.selectedOptions).map(option => option.value);
+            
+            if (selectedSchemas.length === 0) {
+                tablesError.textContent = 'Please select at least one schema';
+                tablesError.style.display = 'block';
+                tablesLoading.style.display = 'none';
+                return;
+            }
+            
+            // Get form data
+            const formData = new FormData(schemaForm);
+            const projectId = formData.get('project_id');
+            const dbId = formData.get('db_id');
+            const csrfToken = formData.get('csrf_token');
+            
+            try {
+                // First, submit the schema selection to create schema in backend
+                const schemaResponse = await fetch('/schema/create', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!schemaResponse.ok) {
+                    throw new Error('Failed to process schema selection');
+                }
+                
+                // Now for each schema, fetch its tables
+                let allTables = [];
+                
+                for (const schema of selectedSchemas) {
+                    // Fetch tables for each schema
+                    const tablesResponse = await             fetch(`/api/schema/${dbId}/${schema}/tables`, {
+                        method: 'GET',
+                        headers: {
+                            'X-CSRF-Token': csrfToken,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!tablesResponse.ok) {
+                        throw new Error(`Failed to fetch tables for schema: ${schema}`);
+                    }
+                    
+                    const tablesData = await tablesResponse.json();
+                    allTables = allTables.concat(tablesData.map(table => ({
+                        ...table,
+                        schema: schema // Add schema name to each table
+                    })));
+                }
+                
+                // Render tables in the UI
+                renderTables(allTables);
+                
+                // Show submit button for selected tables
+                tableSubmitSection.style.display = 'flex';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                tablesError.textContent = error.message || 'An error occurred while fetching tables';
+                tablesError.style.display = 'block';
+            } finally {
+                tablesLoading.style.display = 'none';
+            }
+        });
+    }
+    
+    // Function to render tables
+    function renderTables(tables) {
+        if (tables.length === 0) {
+            tablesContainer.innerHTML = '<p class="text-center py-4">No tables found in the selected schemas</p>';
+            return;
+        }
+        
+        // Clear container
+        tablesContainer.innerHTML = '';
+        
+        // Get template
+        const tableTemplate = document.getElementById('table-entry-template');
+        const columnTemplate = document.getElementById('column-entry-template');
+        
+        // Create table entries
+        tables.forEach(table => {
+            const tableEntry = document.importNode(tableTemplate.content, true).querySelector('.table-entry');
+            
+            // Set table data
+            tableEntry.querySelector('.table-name').textContent = `${table.schema}.${table.table_name}`;
+            tableEntry.querySelector('.table-description').textContent = table.description || 'No description available';
+            
+            // Set data attributes for filtering
+            tableEntry.dataset.tableName = table.table_name.toLowerCase();
+            tableEntry.dataset.schemaName = table.schema.toLowerCase();
+            tableEntry.dataset.tableId = table.table_id;
+            
+            // Add columns if available
+            const columnsGrid = tableEntry.querySelector('.columns-grid');
+            if (table.columns && table.columns.length > 0) {
+                table.columns.forEach(column => {
+                    const columnEntry = document.importNode(columnTemplate.content, true).querySelector('.column-entry');
+                    
+                    // Set column data
+                    columnEntry.querySelector('.column-name').textContent = column.column_name;
+                    columnEntry.querySelector('.column-type').textContent = column.column_datatype;
+                    
+                    // Set data attributes
+                    const checkbox = columnEntry.querySelector('.column-checkbox');
+                    checkbox.dataset.columnId = column.column_id;
+                    checkbox.dataset.columnName = column.column_name;
+                    
+                    columnsGrid.appendChild(columnEntry);
+                });
+            } else {
+                columnsGrid.innerHTML = '<p class="col-span-2 text-center py-2">No columns information available</p>';
+            }
+            
+            // Add toggle functionality for columns
+            const toggleBtn = tableEntry.querySelector('.toggle-columns-btn');
+            const columnsList = tableEntry.querySelector('.columns-list');
+            
+            toggleBtn.addEventListener('click', function() {
+                columnsList.classList.toggle('hidden');
+                
+                // Toggle icon direction
+                const icon = toggleBtn.querySelector('svg');
+                if (columnsList.classList.contains('hidden')) {
+                    icon.innerHTML = '<polyline points="6 9 12 15 18 9"></polyline>';
+                } else {
+                    icon.innerHTML = '<polyline points="18 15 12 9 6 15"></polyline>';
+                }
+            });
+            
+            // Add to container
+            tablesContainer.appendChild(tableEntry);
+        });
+        
+        // Initialize search
+        initTableSearch();
+    }
+    
+    // Table search functionality
+    function initTableSearch() {
+        if (tableSearch) {
+            tableSearch.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                const tableEntries = tablesContainer.querySelectorAll('.table-entry');
+                
+                tableEntries.forEach(entry => {
+                    const tableName = entry.dataset.tableName;
+                    const schemaName = entry.dataset.schemaName;
+                    const searchText = `${schemaName}.${tableName}`;
+                    
+                    if (searchText.includes(searchTerm)) {
+                        entry.style.display = 'block';
+                    } else {
+                        entry.style.display = 'none';
+                    }
+                });
+            });
+        }
+    }
+    
+    // Handle submit button for selected tables
+    const updateDataSourceBtn = document.getElementById('updateDataSource');
+    if (updateDataSourceBtn) {
+        updateDataSourceBtn.addEventListener('click', function() {
+            // Collect all selected tables and columns
+            const selectedTables = [];
+            const tableEntries = tablesContainer.querySelectorAll('.table-entry');
+            
+            tableEntries.forEach(entry => {
+                const tableCheckbox = entry.querySelector('.table-checkbox');
+                
+                if (tableCheckbox.checked) {
+                    const tableId = entry.dataset.tableId;
+                    const tableName = entry.querySelector('.table-name').textContent;
+                    const schemaName = entry.dataset.schemaName;
+                    
+                    // Get selected columns
+                    const selectedColumns = [];
+                    const columnCheckboxes = entry.querySelectorAll('.column-checkbox:checked');
+                    
+                    columnCheckboxes.forEach(checkbox => {
+                        selectedColumns.push({
+                            column_id: checkbox.dataset.columnId,
+                            column_name: checkbox.dataset.columnName
+                        });
+                    });
+                    
+                    selectedTables.push({
+                        table_id: tableId,
+                        schema_name: schemaName,
+                        table_name: tableName,
+                        columns: selectedColumns
+                    });
+                }
+            });
+            
+            if (selectedTables.length === 0) {
+                alert('Please select at least one table');
+                return;
+            }
+            
+            // Submit selection to backend
+            const formData = new FormData(schemaForm);
+            const projectId = formData.get('project_id');
+            const csrfToken = formData.get('csrf_token');
+            
+            fetch('/api/project/tables', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
+                },
+                body: JSON.stringify({
+                    project_id: projectId,
+                    tables: selectedTables
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to update data source');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Show success message and redirect
+                alert('Data source updated successfully');
+                window.location.reload();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert(error.message || 'An error occurred while updating data source');
+            });
+        });
+    }
+});
+</script>
 {{end}}
