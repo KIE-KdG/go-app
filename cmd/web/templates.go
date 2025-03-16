@@ -25,6 +25,7 @@ type templateData struct {
 	Project         *models.Project
 	ProjectDatabase *models.ProjectDatabase
 	ProjectSchemas  []string
+	SchemaList      []string
 	Files           []*models.File
 	HasDocuments    bool
 }

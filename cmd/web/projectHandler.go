@@ -3,11 +3,12 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/julienschmidt/httprouter"
 	"kdg/be/lab/internal/models"
 	"kdg/be/lab/internal/validator"
 	"net/http"
+
+	"github.com/google/uuid"
+	"github.com/julienschmidt/httprouter"
 )
 
 type projectCreateForm struct {
@@ -124,7 +125,8 @@ func (app *application) projectView(w http.ResponseWriter, r *http.Request) {
 	data.Project = project
 	data.Files = files
 	data.ProjectDatabase = projectDatabase
-	data.ProjectSchemas = projectSchemas // Assign slice directly (not dereferenced pointer)
+	data.ProjectSchemas = projectSchemas
+	data.SchemaList = projectSchemas   // Assign slice directly (not dereferenced pointer)
 	data.HasDocuments = len(files) > 0   // Flag to indicate if documents exist
 	data.Form = projectForms{}
 
