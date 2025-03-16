@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -51,7 +52,19 @@ type SchemaResponse struct {
 }
 
 type SrcSchemaResponse struct {
-	Name []string `json:"name"`
+	Name []string `json:"name,omitempty"`
+}
+
+type SchemaExplenationRequest struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	SchemaName string `json:"schema_name"`
+}
+
+type SchemaExplenationResponse struct {
+	TableID    uuid.UUID `json:"table_id"`
+	SchemaName string    `json:"schema_name"`
+	TableName string `json:"table_name"`
+	Description string `json:"description"`
 }
 
 // NewExternalAPIClient creates a new API client
@@ -115,38 +128,53 @@ func (c *ExternalAPIClient) CreateProjectDatabase(projectID uuid.UUID, connStrin
 }
 
 // CreateDatabaseSchema sends a database schema creation request to the external API
-func (c *ExternalAPIClient) CreateDatabaseSchema(dbID uuid.UUID) (*SchemaResponse, error) {
-	// Prepare empty request payload (as per original implementation)
-	reqData := SchemaRequest{}
+func (c *ExternalAPIClient) CreateDatabaseSchema(dbID uuid.UUID, schemaName string) (*SchemaResponse, error) {
+	// The API expects a list of schema requests
+	reqData := []SchemaRequest{
+			{
+					Name: schemaName,
+					// Note: DatabaseID is not needed in the request body since it's in the URL
+			},
+	}
 
 	// Create API request
 	apiReq := APIRequest{
-		Method:      http.MethodPost,
-		URL:         c.buildURL("/api/databases/%s/schemas", dbID),
-		RequestBody: reqData,
+			Method:      http.MethodPost,
+			URL:         c.buildURL("/api/databases/%s/schemas", dbID),
+			RequestBody: reqData,
 	}
 
 	// Send request and parse response
-	var response SchemaResponse
-	err := c.sendAPIRequest(apiReq, &response)
+	// The API returns a list of SchemaResponse objects, but we're only sending one
+	// schema request, so we'll only get one response
+	var responses []SchemaResponse
+	err := c.sendAPIRequest(apiReq, &responses)
 	if err != nil {
-		return nil, err
+			return nil, err
 	}
 
-	return &response, nil
+	// Make sure we got at least one response
+	if len(responses) == 0 {
+			return nil, fmt.Errorf("no schema response received from API")
+	}
+
+	// Return the first (and only) response
+	return &responses[0], nil
 }
 
-func (c *ExternalAPIClient) GetDatabaseSchemas(dbID uuid.UUID) (*SrcSchemaResponse, error) {
+func (c *ExternalAPIClient) GetDatabaseSchemas(dbID uuid.UUID) (*[]string, error) {
 	apiReq := APIRequest{
 		Method: http.MethodGet,
 		URL:    c.buildURL("/api/databases/%s/src-schemas", dbID),
 	}
 
-	var response SrcSchemaResponse
+	var response []string
 	err := c.sendAPIRequest(apiReq, &response)
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Printf("schemas found for DB: %s, %s", dbID, response)
 
 	return &response, nil
 }

@@ -97,6 +97,8 @@ func (app *application) projectView(w http.ResponseWriter, r *http.Request) {
 	// Get database for this project
 	// We'll handle the case where no database exists
 	var projectDatabase *models.ProjectDatabase
+	var projectSchemas []string
+
 	projectDatabase, err = app.projectDatabase.GetByProjectID(projectID)
 	if err != nil {
 		if !errors.Is(err, models.ErrNoRecord) {
@@ -107,20 +109,43 @@ func (app *application) projectView(w http.ResponseWriter, r *http.Request) {
 		// If there's no database record, projectDatabase will be nil
 	}
 
+	// Only try to fetch schemas if we have a database
+	if projectDatabase != nil && projectDatabase.ID != uuid.Nil {
+		schemasPtr, err := app.externalAPI.GetDatabaseSchemas(projectDatabase.ID)
+		if err != nil {
+			app.errorLog.Printf("Schema get error: %v", err)
+			app.errorLog.Printf("Continuing with empty schema list")
+			// Continue with empty schemas rather than failing the whole page
+		} else if schemasPtr != nil {
+			projectSchemas = *schemasPtr // Dereference only if not nil
+		}
+	}
+
 	data := app.newTemplateData(r)
 	data.Project = project
 	data.Files = files
 	data.ProjectDatabase = projectDatabase
+	data.ProjectSchemas = projectSchemas // Assign slice directly (not dereferenced pointer)
 	data.HasDocuments = len(files) > 0 // Flag to indicate if documents exist
-	data.Form = databaseSetupForm{}
+	data.Form = projectForms{}
 
 	app.render(w, http.StatusOK, "project.tmpl.html", data)
+}
+
+type projectForms struct {
+	DatabaseForm databaseSetupForm
+	SchemaForm   schemaSetupForm
 }
 
 type databaseSetupForm struct {
 	ProjectID           string `form:"project_id"`
 	ConnectionString    string `form:"connstring"`
 	DbType              string `form:"dbtype"`
+	validator.Validator `form:"-"`
+}
+
+type schemaSetupForm struct {
+	Name                string `form:"name"`
 	validator.Validator `form:"-"`
 }
 
@@ -194,66 +219,101 @@ func (app *application) projectDatabaseSetupPost(w http.ResponseWriter, r *http.
 }
 
 type schemaCreate struct {
+	DbID                string `form:"db_id"`
 	ProjectID           string `form:"project_id"`
 	SchemaName          string `form:"schemaName"`
 	validator.Validator `form:"-"`
 }
 
 func (app *application) databaseSchemaPost(w http.ResponseWriter, r *http.Request) {
-	var form schemaCreate
-	err := app.decodePostForm(r, &form)
+	var schemaForm schemaCreate
+	err := app.decodePostForm(r, &schemaForm)
 	if err != nil {
-		app.errorLog.Printf("Form decode error: %v", err)
-		app.clientError(w, http.StatusBadRequest)
-		return
-	}
-
-	form.CheckField(validator.NotBlank(form.SchemaName), "connstring", "Schema Name cannot be empty")
-
-	projectID, err := uuid.Parse(form.ProjectID)
-	if err != nil {
-		app.errorLog.Printf("Invalid project ID: %v", err)
-		form.AddNonFieldError("Invalid project ID")
-		app.renderFormErrors(w, r, form, "project.tmpl.html")
-		return
-	}
-
-	if !form.Valid() {
-		// Get the project and files for the template
-		project, pErr := app.projects.Get(projectID)
-		if pErr != nil {
-			app.errorLog.Printf("Project not found: %v", pErr)
-			app.notFound(w)
+			app.errorLog.Printf("Form decode error: %v", err)
+			app.clientError(w, http.StatusBadRequest)
 			return
-		}
-
-		files, fErr := app.files.GetByProject(projectID)
-		if fErr != nil {
-			app.errorLog.Printf("Error fetching files: %v", fErr)
-			app.serverError(w, fErr)
-			return
-		}
-
-		// Prepare template data
-		data := app.newTemplateData(r)
-		data.Project = project
-		data.Files = files
-		data.HasDocuments = len(files) > 0
-		data.Form = form // Include the form with errors
-
-		// Render the template
-		app.render(w, http.StatusUnprocessableEntity, "project.tmpl.html", data)
-		return
 	}
 
-	_, err = app.externalAPI.CreateDatabaseSchema(projectID)
+	schemaForm.CheckField(validator.NotBlank(schemaForm.SchemaName), "schemaName", "Schema Name cannot be empty")
+
+	projectID, err := uuid.Parse(schemaForm.ProjectID)
 	if err != nil {
-		app.errorLog.Printf("Database connection creation error: %v", err)
-		app.serverError(w, err)
-		return
+			app.errorLog.Printf("Invalid project ID: %v", err)
+			schemaForm.AddNonFieldError("Invalid project ID")
+			app.renderSchemaFormWithErrors(w, r, projectID, schemaForm)
+			return
+	}
+
+	// Parse database ID
+	dbID, err := uuid.Parse(schemaForm.DbID)
+	if err != nil {
+			app.errorLog.Printf("Invalid database ID: %v", err)
+			schemaForm.AddNonFieldError("Invalid database ID")
+			app.renderSchemaFormWithErrors(w, r, projectID, schemaForm)
+			return
+	}
+
+	if !schemaForm.Valid() {
+			app.renderSchemaFormWithErrors(w, r, projectID, schemaForm)
+			return
+	}
+
+	// Now call the API with both the database ID and schema name
+	_, err = app.externalAPI.CreateDatabaseSchema(dbID, schemaForm.SchemaName)
+	if err != nil {
+			app.errorLog.Printf("Database schema creation error: %v", err)
+			app.serverError(w, err)
+			return
 	}
 
 	app.sessionManager.Put(r.Context(), "flash", "Schema successfully created")
-
 	http.Redirect(w, r, fmt.Sprintf("/project/view/%s", projectID), http.StatusSeeOther)
+}
+
+// Helper function to avoid code duplication when rendering the schema form with errors
+func (app *application) renderSchemaFormWithErrors(w http.ResponseWriter, r *http.Request, projectID uuid.UUID, schemaForm schemaCreate) {
+	// Get the project and files for the template
+	project, pErr := app.projects.Get(projectID)
+	if pErr != nil {
+			app.errorLog.Printf("Project not found: %v", pErr)
+			app.notFound(w)
+			return
+	}
+
+	files, fErr := app.files.GetByProject(projectID)
+	if fErr != nil {
+			app.errorLog.Printf("Error fetching files: %v", fErr)
+			app.serverError(w, fErr)
+			return
+	}
+
+	// Get project database
+	projectDatabase, dbErr := app.projectDatabase.GetByProjectID(projectID)
+	if dbErr != nil && !errors.Is(dbErr, models.ErrNoRecord) {
+			app.errorLog.Printf("Error fetching project database: %v", dbErr)
+			app.serverError(w, dbErr)
+			return
+	}
+
+	// Create the correct form structure that matches template expectations
+	formData := projectForms{
+			SchemaForm: schemaSetupForm{
+					Name: schemaForm.SchemaName,
+			},
+	}
+	
+	// Copy validation errors
+	formData.SchemaForm.FieldErrors = schemaForm.FieldErrors
+	formData.SchemaForm.NonFieldErrors = schemaForm.NonFieldErrors
+
+	// Prepare template data
+	data := app.newTemplateData(r)
+	data.Project = project
+	data.Files = files
+	data.ProjectDatabase = projectDatabase
+	data.HasDocuments = len(files) > 0
+	data.Form = formData
+
+	// Render the template
+	app.render(w, http.StatusUnprocessableEntity, "project.tmpl.html", data)
 }

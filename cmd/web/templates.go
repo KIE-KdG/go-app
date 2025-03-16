@@ -24,6 +24,7 @@ type templateData struct {
 	Projects        []*models.Project
 	Project         *models.Project
 	ProjectDatabase *models.ProjectDatabase
+	ProjectSchemas  []string
 	Files           []*models.File
 	HasDocuments    bool
 }
@@ -37,9 +38,9 @@ func humanDate(t time.Time) string {
 }
 
 var functions = template.FuncMap{
-	"humanDate": humanDate,
-	"formatFileSize": formatFileSize,
-	"roleBadgeClass": roleBadgeClass,
+	"humanDate":        humanDate,
+	"formatFileSize":   formatFileSize,
+	"roleBadgeClass":   roleBadgeClass,
 	"statusBadgeClass": statusBadgeClass,
 }
 
@@ -47,13 +48,13 @@ var functions = template.FuncMap{
 func roleBadgeClass(role string) string {
 	switch role {
 	case "CONTENT":
-			return "badge badge-primary"
+		return "badge badge-primary"
 	case "METADATA":
-			return "badge badge-secondary"
+		return "badge badge-secondary"
 	case "SCHEMA":
-			return "badge badge-accent"
+		return "badge badge-accent"
 	default:
-			return "badge badge-ghost"
+		return "badge badge-ghost"
 	}
 }
 
@@ -61,13 +62,13 @@ func roleBadgeClass(role string) string {
 func statusBadgeClass(status string) string {
 	switch status {
 	case "processed":
-			return "badge badge-success"
+		return "badge badge-success"
 	case "uploaded":
-			return "badge badge-info"
+		return "badge badge-info"
 	case "error":
-			return "badge badge-error"
+		return "badge badge-error"
 	default:
-			return "badge badge-warning"
+		return "badge badge-warning"
 	}
 }
 
@@ -99,10 +100,10 @@ func newTemplateCache() (map[string]*template.Template, error) {
 
 	for _, page := range pages {
 		name := filepath.Base(page)
-		
+
 		// Determine which base template to use
 		var ts *template.Template
-		
+
 		if authTemplates[name] {
 			// For authentication pages, use auth_base.tmpl.html
 			ts, err = template.New(name).Funcs(functions).ParseFiles("./ui/html/auth_base.tmpl.html")
@@ -110,7 +111,7 @@ func newTemplateCache() (map[string]*template.Template, error) {
 			// For regular pages, use the standard base.tmpl.html
 			ts, err = template.New(name).Funcs(functions).ParseFiles("./ui/html/base.tmpl.html")
 		}
-		
+
 		if err != nil {
 			return nil, err
 		}

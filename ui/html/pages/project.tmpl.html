@@ -83,7 +83,8 @@
               <label class="label">
                 <span class="label-text">Connection String</span>
               </label>
-              <input type='text' name='connstring' value='{{with .Form}}{{.ConnectionString}}{{end}}' 
+
+              <input type='text' name='connstring' value='{{with .Form.DatabaseForm}}{{.ConnectionString}}{{end}}' 
                      class="input input-bordered w-full" placeholder="Connection String">
               {{with .Form.FieldErrors.connstring}}
               <label class='label'>
