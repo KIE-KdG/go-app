@@ -11,61 +11,54 @@
             <h2 class="card-title text-lg font-medium mb-4">1. Select Schema(s)</h2>
 
             {{if .ProjectSchemas}}
-            <div class="flex flex-col gap-4">
-                <select name="schemas" id="schemas" multiple class="select select-bordered w-full h-40" size="5">
-                    <!-- Loop through schema names directly without accessing .Name -->
-                    {{range .ProjectSchemas}}
-                    <option value="{{.}}">{{.}}</option>
-                    {{end}}
-                </select>
-                <label class="label">
-                    <span class="label-text-alt">Hold Ctrl/Cmd to select multiple schemas</span>
-                </label>
-            </div>
+
+            <form action="/schema/create" method="POST" novalidate>
+                <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
+                <input type='hidden' name='db_id' value='{{.ProjectDatabase.ID}}'>
+                <input type='hidden' name='project_id' value='{{.Project.ID}}'>
+
+                {{with .Form.DatabaseForm}}
+                {{range .NonFieldErrors}}
+                <div class='alert alert-error mb-4'>{{.}}</div>
+                {{end}}
+                {{end}}
+
+                <div class="flex flex-col gap-4">
+                    <label for="schemaName">Schemas:</label>
+                    <select name="schemaName" id="schemaName" class="select select-bordered w-full h-40" size="5" multiple>
+                        <!-- Loop through schema names directly without accessing .Name -->
+                        {{range .ProjectSchemas}}
+                        <option value="{{.}}">{{.}}</option>
+                        {{end}}
+                    </select>
+                    <label class="label">
+                        <span class="label-text-alt">Hold Ctrl/Cmd to select multiple schemas</span>
+                    </label>
+
+                    <button type="submit" id="fetchTable" class="btn btn-primary w-full">Fetch Tables</button>
+                </div>
+            </form>
+
             {{else}}
             <div class="bg-base-200 rounded-lg p-6 shadow-md">
-                <form action="/schema/create" method="POST" novalidate>
-                    <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
-                    <input type='hidden' name='db_id' value='{{.ProjectDatabase.ID}}'>
-                    <input type='hidden' name='project_id' value='{{.Project.ID}}'>
-
-                    {{range .Form.SchemaForm.NonFieldErrors}}
-                    <div class='alert alert-error mb-4'>{{.}}</div>
-                    {{end}}
-
-                    <div class="form-control mb-4">
-                        <label class="label">
-                            <span class="label-text">Schema Name</span>
-                        </label>
-                        <input type='text' name='schemaName' value='{{.Form.SchemaForm.Name}}'
-                            class="input input-bordered w-full" placeholder="Schema Name">
-                    </div>
-
-                    {{with .Form.SchemaForm.FieldErrors.schemaName}}
-                    <label class='label'>
-                        <span class='label-text-alt text-error'>{{.}}</span>
-                    </label>
-                    {{end}}
-
-                    <div class="card-actions justify-center mt-4">
-                        <button type='submit' class="btn btn-primary w-full">Create Schema</button>
-                    </div>
-                </form>
+                <p class="text-base-content">No schemas available for this project, please add a schema to
+                    continue.</p>
             </div>
             {{end}}
+
         </div>
     </div>
 
     <!-- Rest of the template remains unchanged -->
     <!-- Tables Selection Section -->
-    <div class="card bg-base-100 shadow-lg w-full">
+    <div class="card bg-base-100 shadow-lg w-full" hidden>
         <div class="card-body">
             <h2 class="card-title text-lg font-medium mb-4">2. Select Tables and Columns</h2>
 
             <div class="mb-6">
                 <div class="form-control w-full">
                     <input type="text" placeholder="Search tables..." id="table-search"
-                        class="input input-bordered w-full" />
+                           class="input input-bordered w-full"/>
                 </div>
             </div>
 
@@ -81,45 +74,4 @@
         <button type="submit" class="btn btn-primary btn-lg">Update data source</button>
     </div>
 </div>
-
-<script>
-    // Client-side functionality for searching and filtering
-    document.addEventListener('DOMContentLoaded', function () {
-        // Table search functionality
-        const tableSearch = document.getElementById('table-search');
-        const tableDetails = document.querySelectorAll('#tables-container details');
-
-        tableSearch.addEventListener('input', function () {
-            const searchText = this.value.toLowerCase();
-            tableDetails.forEach(details => {
-                const tableName = details.querySelector('summary span:nth-child(2)').textContent.toLowerCase();
-                const tableDesc = details.querySelector('.collapse-content p').textContent.toLowerCase();
-                const isMatch = tableName.includes(searchText) || tableDesc.includes(searchText);
-                details.style.display = isMatch ? '' : 'none';
-            });
-        });
-
-        // Schema selection change handler
-        const schemaSelect = document.getElementById('schemas');
-        schemaSelect.addEventListener('change', function () {
-            // Get selected schemas
-            const selectedSchemas = Array.from(this.selectedOptions)
-                .map(option => option.value);
-
-            if (selectedSchemas.length === 0) {
-                // Show all tables if no schema is selected
-                tableDetails.forEach(details => {
-                    details.style.display = '';
-                });
-                return;
-            }
-
-            // Filter tables based on selected schemas
-            tableDetails.forEach(details => {
-                const schemaName = details.querySelector('.badge').textContent.replace('Schema: ', '');
-                details.style.display = selectedSchemas.includes(schemaName) ? '' : 'none';
-            });
-        });
-    });
-</script>
 {{end}}

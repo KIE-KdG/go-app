@@ -56,15 +56,15 @@ type SrcSchemaResponse struct {
 }
 
 type SchemaExplenationRequest struct {
-	ProjectID uuid.UUID `json:"project_id"`
-	SchemaName string `json:"schema_name"`
+	ProjectID  uuid.UUID `json:"project_id"`
+	SchemaName string    `json:"schema_name"`
 }
 
 type SchemaExplenationResponse struct {
-	TableID    uuid.UUID `json:"table_id"`
-	SchemaName string    `json:"schema_name"`
-	TableName string `json:"table_name"`
-	Description string `json:"description"`
+	TableID     uuid.UUID `json:"table_id"`
+	SchemaName  string    `json:"schema_name"`
+	TableName   string    `json:"table_name"`
+	Description string    `json:"description"`
 }
 
 // NewExternalAPIClient creates a new API client
@@ -128,20 +128,20 @@ func (c *ExternalAPIClient) CreateProjectDatabase(projectID uuid.UUID, connStrin
 }
 
 // CreateDatabaseSchema sends a database schema creation request to the external API
-func (c *ExternalAPIClient) CreateDatabaseSchema(dbID uuid.UUID, schemaName string) (*SchemaResponse, error) {
+func (c *ExternalAPIClient) CreateDatabaseSchema(dbID uuid.UUID, schemaName []string) (*SchemaResponse, error) {
 	// The API expects a list of schema requests
 	reqData := []SchemaRequest{
-			{
-					Name: schemaName,
-					// Note: DatabaseID is not needed in the request body since it's in the URL
-			},
+		{
+			Name: schemaName,
+			// Note: DatabaseID is not needed in the request body since it's in the URL
+		},
 	}
 
 	// Create API request
 	apiReq := APIRequest{
-			Method:      http.MethodPost,
-			URL:         c.buildURL("/api/databases/%s/schemas", dbID),
-			RequestBody: reqData,
+		Method:      http.MethodPost,
+		URL:         c.buildURL("/api/databases/%s/schemas", dbID),
+		RequestBody: reqData,
 	}
 
 	// Send request and parse response
@@ -150,12 +150,12 @@ func (c *ExternalAPIClient) CreateDatabaseSchema(dbID uuid.UUID, schemaName stri
 	var responses []SchemaResponse
 	err := c.sendAPIRequest(apiReq, &responses)
 	if err != nil {
-			return nil, err
+		return nil, err
 	}
 
 	// Make sure we got at least one response
 	if len(responses) == 0 {
-			return nil, fmt.Errorf("no schema response received from API")
+		return nil, fmt.Errorf("no schema response received from API")
 	}
 
 	// Return the first (and only) response
