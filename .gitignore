@@ -30,3 +30,4 @@ node_modules
 #sqlite
 data/sqlite_lab.db
 data/sessions.db
+.idea
