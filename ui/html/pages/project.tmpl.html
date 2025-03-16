@@ -73,26 +73,29 @@
         <form action="/project/db/setup" method="post" novalidate class="w-full max-w-md">
           <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
           <input type='hidden' name='project_id' value='{{.Project.ID}}'>
-
-          {{range .Form.NonFieldErrors}}
-          <div class='alert alert-error mb-4'>{{.}}</div>
+        
+          <!-- Use the correct form field path for errors -->
+          {{with .Form.DatabaseForm}}
+            {{range .NonFieldErrors}}
+            <div class='alert alert-error mb-4'>{{.}}</div>
+            {{end}}
           {{end}}
-
+        
           <div class="space-y-4">
             <div class="form-control">
               <label class="label">
                 <span class="label-text">Connection String</span>
               </label>
-
+        
               <input type='text' name='connstring' value='{{with .Form.DatabaseForm}}{{.ConnectionString}}{{end}}' 
-                     class="input input-bordered w-full" placeholder="Connection String">
-              {{with .Form.FieldErrors.connstring}}
+                      class="input input-bordered w-full" placeholder="Connection String">
+              {{with .Form.DatabaseForm.FieldErrors.connstring}}
               <label class='label'>
                 <span class='label-text-alt text-error'>{{.}}</span>
               </label>
               {{end}}
             </div>
-
+        
             <div class="form-control">
               <label class="label">
                 <span class="label-text">Database Type</span>
@@ -103,13 +106,13 @@
                 <option value="mysql">MySQL</option>
                 <option value="sqlserver">SQL Server</option>
               </select>
-              {{with .Form.FieldErrors.dbtype}}
+              {{with .Form.DatabaseForm.FieldErrors.dbtype}}
               <label class='label'>
                 <span class='label-text-alt text-error'>{{.}}</span>
               </label>
               {{end}}
             </div>
-
+        
             <div class="card-actions justify-center mt-4">
               <button type='submit' class="btn btn-primary w-full">Connect Database</button>
             </div>
