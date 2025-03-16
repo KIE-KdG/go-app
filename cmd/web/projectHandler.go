@@ -145,7 +145,7 @@ type databaseSetupForm struct {
 }
 
 type schemaSetupForm struct {
-	Name                string `form:"name"`
+	Name                []string `form:"name"`
 	validator.Validator `form:"-"`
 }
 

@@ -130,11 +130,13 @@ func (c *ExternalAPIClient) CreateProjectDatabase(projectID uuid.UUID, connStrin
 // CreateDatabaseSchema sends a database schema creation request to the external API
 func (c *ExternalAPIClient) CreateDatabaseSchema(dbID uuid.UUID, schemaName []string) (*SchemaResponse, error) {
 	// The API expects a list of schema requests
-	reqData := []SchemaRequest{
-		{
-			Name: schemaName,
+	var reqData []SchemaRequest
+
+	for _, schema := range schemaName {
+		reqData = append(reqData, SchemaRequest{
+			Name: schema,
 			// Note: DatabaseID is not needed in the request body since it's in the URL
-		},
+		})
 	}
 
 	// Create API request
