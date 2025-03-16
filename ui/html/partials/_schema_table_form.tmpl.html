@@ -26,9 +26,9 @@
                 <div class="flex flex-col gap-4">
                     <label for="schemaName">Schemas:</label>
                     <select name="schemaName" id="schemaName" class="select select-bordered w-full h-40" size="5" multiple>
-                        <!-- Loop through schema names directly without accessing .Name -->
-                        {{range .ProjectSchemas}}
-                        <option value="{{.}}">{{.}}</option>
+                        <!-- Show schema options with ID as value and name as display text -->
+                        {{range .SchemaList}}
+                        <option value="{{.ID}}">{{.Name}}</option>
                         {{end}}
                     </select>
                     <label class="label">
@@ -157,7 +157,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // Get form data
             const formData = new FormData(schemaForm);
             const projectId = formData.get('project_id');
-            const dbId = formData.get('db_id');
             const csrfToken = formData.get('csrf_token');
             
             try {
@@ -171,12 +170,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     throw new Error('Failed to process schema selection');
                 }
                 
-                // Now for each schema, fetch its tables
+                // Now for each schema ID, fetch its tables
                 let allTables = [];
                 
-                for (const schema of selectedSchemas) {
-                    // Fetch tables for each schema
-                    const tablesResponse = await             fetch(`/api/schema/${dbId}/${schema}/tables`, {
+                for (const schemaId of selectedSchemas) {
+                    console.log(`Fetching tables for schema ID: ${schemaId}`);
+                    
+                    // Fetch tables for schema ID (not schema name)
+                    const tablesResponse = await fetch(`/api/schema/${schemaId}/tables`, {
                         method: 'GET',
                         headers: {
                             'X-CSRF-Token': csrfToken,
@@ -185,13 +186,32 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                     
                     if (!tablesResponse.ok) {
-                        throw new Error(`Failed to fetch tables for schema: ${schema}`);
+                        console.error(`Server response for schema ${schemaId}:`, await tablesResponse.text());
+                        throw new Error(`Failed to fetch tables for schema ID: ${schemaId}`);
                     }
                     
-                    const tablesData = await tablesResponse.json();
+                    let tablesData;
+                    try {
+                        tablesData = await tablesResponse.json();
+                        console.log(`Tables data for schema ${schemaId}:`, tablesData);
+                    } catch (e) {
+                        console.error(`Error parsing JSON for schema ${schemaId}:`, e);
+                        throw new Error(`Failed to parse tables data for schema ID: ${schemaId}`);
+                    }
+                    
+                    // If tablesData is not an array, wrap it or handle accordingly
+                    if (!Array.isArray(tablesData)) {
+                        console.warn(`Expected array for tables data, got:`, tablesData);
+                        tablesData = tablesData.tables || [];
+                    }
+                    
+                    // Find the schema name from the select option
+                    const schemaOption = Array.from(schemaSelect.options).find(opt => opt.value === schemaId);
+                    const schemaName = schemaOption ? schemaOption.textContent : schemaId;
+                    
                     allTables = allTables.concat(tablesData.map(table => ({
                         ...table,
-                        schema: schema // Add schema name to each table
+                        schema: schemaName // Add schema name for display purposes
                     })));
                 }
                 
@@ -213,7 +233,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to render tables
     function renderTables(tables) {
-        if (tables.length === 0) {
+        console.log("Rendering tables:", tables);
+        
+        if (!tables || tables.length === 0) {
             tablesContainer.innerHTML = '<p class="text-center py-4">No tables found in the selected schemas</p>';
             return;
         }
@@ -225,58 +247,84 @@ document.addEventListener('DOMContentLoaded', function() {
         const tableTemplate = document.getElementById('table-entry-template');
         const columnTemplate = document.getElementById('column-entry-template');
         
+        if (!tableTemplate || !columnTemplate) {
+            console.error("Table or column template not found");
+            tablesContainer.innerHTML = '<p class="alert alert-error">Error: Template not found</p>';
+            return;
+        }
+        
         // Create table entries
         tables.forEach(table => {
-            const tableEntry = document.importNode(tableTemplate.content, true).querySelector('.table-entry');
-            
-            // Set table data
-            tableEntry.querySelector('.table-name').textContent = `${table.schema}.${table.table_name}`;
-            tableEntry.querySelector('.table-description').textContent = table.description || 'No description available';
-            
-            // Set data attributes for filtering
-            tableEntry.dataset.tableName = table.table_name.toLowerCase();
-            tableEntry.dataset.schemaName = table.schema.toLowerCase();
-            tableEntry.dataset.tableId = table.table_id;
-            
-            // Add columns if available
-            const columnsGrid = tableEntry.querySelector('.columns-grid');
-            if (table.columns && table.columns.length > 0) {
-                table.columns.forEach(column => {
-                    const columnEntry = document.importNode(columnTemplate.content, true).querySelector('.column-entry');
-                    
-                    // Set column data
-                    columnEntry.querySelector('.column-name').textContent = column.column_name;
-                    columnEntry.querySelector('.column-type').textContent = column.column_datatype;
-                    
-                    // Set data attributes
-                    const checkbox = columnEntry.querySelector('.column-checkbox');
-                    checkbox.dataset.columnId = column.column_id;
-                    checkbox.dataset.columnName = column.column_name;
-                    
-                    columnsGrid.appendChild(columnEntry);
-                });
-            } else {
-                columnsGrid.innerHTML = '<p class="col-span-2 text-center py-2">No columns information available</p>';
-            }
-            
-            // Add toggle functionality for columns
-            const toggleBtn = tableEntry.querySelector('.toggle-columns-btn');
-            const columnsList = tableEntry.querySelector('.columns-list');
-            
-            toggleBtn.addEventListener('click', function() {
-                columnsList.classList.toggle('hidden');
-                
-                // Toggle icon direction
-                const icon = toggleBtn.querySelector('svg');
-                if (columnsList.classList.contains('hidden')) {
-                    icon.innerHTML = '<polyline points="6 9 12 15 18 9"></polyline>';
-                } else {
-                    icon.innerHTML = '<polyline points="18 15 12 9 6 15"></polyline>';
+            try {
+                if (!table || typeof table !== 'object') {
+                    console.warn("Invalid table data:", table);
+                    return;
                 }
-            });
-            
-            // Add to container
-            tablesContainer.appendChild(tableEntry);
+                
+                const tableEntry = document.importNode(tableTemplate.content, true).querySelector('.table-entry');
+                
+                // Set table data - handle missing properties safely
+                const tableName = table.table_name || table.tableName || 'Unknown';
+                const schemaName = table.schema || table.schemaName || 'Unknown';
+                const tableId = table.table_id || table.tableId || '';
+                const description = table.description || table.tableDescription || 'No description available';
+                
+                tableEntry.querySelector('.table-name').textContent = `${schemaName}.${tableName}`;
+                tableEntry.querySelector('.table-description').textContent = description;
+                
+                // Set data attributes for filtering
+                tableEntry.dataset.tableName = tableName.toLowerCase();
+                tableEntry.dataset.schemaName = schemaName.toLowerCase();
+                tableEntry.dataset.tableId = tableId;
+                
+                // Add columns if available
+                const columnsGrid = tableEntry.querySelector('.columns-grid');
+                if (table.columns && Array.isArray(table.columns) && table.columns.length > 0) {
+                    table.columns.forEach(column => {
+                        if (!column) return;
+                        
+                        const columnEntry = document.importNode(columnTemplate.content, true).querySelector('.column-entry');
+                        
+                        // Set column data
+                        const columnName = column.column_name || column.columnName || 'Unknown';
+                        const columnType = column.column_datatype || column.columnDatatype || column.dataType || 'Unknown';
+                        const columnId = column.column_id || column.columnId || '';
+                        
+                        columnEntry.querySelector('.column-name').textContent = columnName;
+                        columnEntry.querySelector('.column-type').textContent = columnType;
+                        
+                        // Set data attributes
+                        const checkbox = columnEntry.querySelector('.column-checkbox');
+                        checkbox.dataset.columnId = columnId;
+                        checkbox.dataset.columnName = columnName;
+                        
+                        columnsGrid.appendChild(columnEntry);
+                    });
+                } else {
+                    columnsGrid.innerHTML = '<p class="col-span-2 text-center py-2">No columns information available</p>';
+                }
+                
+                // Add toggle functionality for columns
+                const toggleBtn = tableEntry.querySelector('.toggle-columns-btn');
+                const columnsList = tableEntry.querySelector('.columns-list');
+                
+                toggleBtn.addEventListener('click', function() {
+                    columnsList.classList.toggle('hidden');
+                    
+                    // Toggle icon direction
+                    const icon = toggleBtn.querySelector('svg');
+                    if (columnsList.classList.contains('hidden')) {
+                        icon.innerHTML = '<polyline points="6 9 12 15 18 9"></polyline>';
+                    } else {
+                        icon.innerHTML = '<polyline points="18 15 12 9 6 15"></polyline>';
+                    }
+                });
+                
+                // Add to container
+                tablesContainer.appendChild(tableEntry);
+            } catch (e) {
+                console.error("Error rendering table:", e, table);
+            }
         });
         
         // Initialize search
