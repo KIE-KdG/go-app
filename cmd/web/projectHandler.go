@@ -192,3 +192,68 @@ func (app *application) projectDatabaseSetupPost(w http.ResponseWriter, r *http.
 	// Redirect back to the project page
 	http.Redirect(w, r, fmt.Sprintf("/project/view/%s", projectID), http.StatusSeeOther)
 }
+
+type schemaCreate struct {
+	ProjectID           string `form:"project_id"`
+	SchemaName          string `form:"schemaName"`
+	validator.Validator `form:"-"`
+}
+
+func (app *application) databaseSchemaPost(w http.ResponseWriter, r *http.Request) {
+	var form schemaCreate
+	err := app.decodePostForm(r, &form)
+	if err != nil {
+		app.errorLog.Printf("Form decode error: %v", err)
+		app.clientError(w, http.StatusBadRequest)
+		return
+	}
+
+	form.CheckField(validator.NotBlank(form.SchemaName), "connstring", "Schema Name cannot be empty")
+
+	projectID, err := uuid.Parse(form.ProjectID)
+	if err != nil {
+		app.errorLog.Printf("Invalid project ID: %v", err)
+		form.AddNonFieldError("Invalid project ID")
+		app.renderFormErrors(w, r, form, "project.tmpl.html")
+		return
+	}
+
+	if !form.Valid() {
+		// Get the project and files for the template
+		project, pErr := app.projects.Get(projectID)
+		if pErr != nil {
+			app.errorLog.Printf("Project not found: %v", pErr)
+			app.notFound(w)
+			return
+		}
+
+		files, fErr := app.files.GetByProject(projectID)
+		if fErr != nil {
+			app.errorLog.Printf("Error fetching files: %v", fErr)
+			app.serverError(w, fErr)
+			return
+		}
+
+		// Prepare template data
+		data := app.newTemplateData(r)
+		data.Project = project
+		data.Files = files
+		data.HasDocuments = len(files) > 0
+		data.Form = form // Include the form with errors
+
+		// Render the template
+		app.render(w, http.StatusUnprocessableEntity, "project.tmpl.html", data)
+		return
+	}
+
+	_, err = app.externalAPI.CreateDatabaseSchema(projectID)
+	if err != nil {
+		app.errorLog.Printf("Database connection creation error: %v", err)
+		app.serverError(w, err)
+		return
+	}
+
+	app.sessionManager.Put(r.Context(), "flash", "Schema successfully created")
+
+	http.Redirect(w, r, fmt.Sprintf("/project/view/%s", projectID), http.StatusSeeOther)
+}

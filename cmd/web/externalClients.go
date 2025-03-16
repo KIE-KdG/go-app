@@ -1,9 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -27,6 +24,36 @@ type ProjectResponse struct {
 	ProjectName string `json:"project_name"`
 }
 
+// ProjectDatabaseRequest represents the data sent to create a project database
+type ProjectDatabaseRequest struct {
+	ProjectID      uuid.UUID `json:"project_id"`
+	DbSourceString string    `json:"source_db_conn"`
+	DbType         string    `json:"db_type"`
+}
+
+// ProjectDatabaseResponse represents the response from creating a project database
+type ProjectDatabaseResponse struct {
+	ProjectID      uuid.UUID `json:"project_id"`
+	DbSourceString string    `json:"source_db_conn"`
+	DbType         string    `json:"db_type"`
+}
+
+// SchemaRequest represents the data sent to create a database schema
+type SchemaRequest struct {
+	Name       string    `json:"name"`
+	DatabaseID uuid.UUID `json:"database_id"`
+}
+
+// SchemaResponse represents the response from creating a schema
+type SchemaResponse struct {
+	SchemaName string    `json:"name"`
+	SchemaID   uuid.UUID `json:"schema_id"`
+}
+
+type SrcSchemaResponse struct {
+	Name []string `json:"name"`
+}
+
 // NewExternalAPIClient creates a new API client
 func NewExternalAPIClient(baseURL string) *ExternalAPIClient {
 	return &ExternalAPIClient{
@@ -44,111 +71,82 @@ func (c *ExternalAPIClient) CreateExternalProject(userID uuid.UUID, name string)
 		Name: name,
 	}
 
-	reqBody, err := json.Marshal(reqData)
+	// Create API request
+	apiReq := APIRequest{
+		Method:      http.MethodPost,
+		URL:         c.buildURL("/api/users/%s/projects", userID),
+		RequestBody: reqData,
+	}
+
+	// Send request and parse response
+	var response ProjectResponse
+	err := c.sendAPIRequest(apiReq, &response)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling request: %w", err)
+		return nil, err
 	}
 
-	// Build the URL
-	url := fmt.Sprintf("%s/api/users/%s/projects", c.baseURL, userID)
-
-	// Create the request
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send the request
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error sending request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		var errorResp struct {
-			Detail string `json:"detail"`
-		}
-
-		if err := json.NewDecoder(resp.Body).Decode(&errorResp); err != nil {
-			return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-		}
-
-		return nil, fmt.Errorf("API error: %s", errorResp.Detail)
-	}
-
-	// Parse response
-	var projectResp ProjectResponse
-	if err := json.NewDecoder(resp.Body).Decode(&projectResp); err != nil {
-		return nil, fmt.Errorf("error parsing response: %w", err)
-	}
-
-	return &projectResp, nil
+	return &response, nil
 }
 
-type ProjectDatabaseRequest struct {
-	ProjectID      uuid.UUID `json:"project_id"`
-	DbSourceString string    `json:"source_db_conn"`
-	DbType         string    `json:"db_type"`
-}
-
-type ProjectDatabaseResponse struct {
-	ProjectID      uuid.UUID `json:"project_id"`
-	DbSourceString string    `json:"source_db_conn"`
-	DbType         string    `json:"db_type"`
-}
-
+// CreateProjectDatabase sends a project database creation request to the external API
 func (c *ExternalAPIClient) CreateProjectDatabase(projectID uuid.UUID, connString, dbType string) (*ProjectDatabaseResponse, error) {
+	// Prepare the request payload
 	reqData := ProjectDatabaseRequest{
 		ProjectID:      projectID,
 		DbSourceString: connString,
 		DbType:         dbType,
 	}
 
-	reqBody, err := json.Marshal(reqData)
+	// Create API request
+	apiReq := APIRequest{
+		Method:      http.MethodPost,
+		URL:         c.buildURL("/api/projects/%s/databases", projectID),
+		RequestBody: reqData,
+	}
+
+	// Send request and parse response
+	var response ProjectDatabaseResponse
+	err := c.sendAPIRequest(apiReq, &response)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling request: %w", err)
+		return nil, err
 	}
 
-	url := fmt.Sprintf("%s/api/projects/%s/databases", c.baseURL, projectID)
+	return &response, nil
+}
 
-	// Create the request
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(reqBody))
+// CreateDatabaseSchema sends a database schema creation request to the external API
+func (c *ExternalAPIClient) CreateDatabaseSchema(dbID uuid.UUID) (*SchemaResponse, error) {
+	// Prepare empty request payload (as per original implementation)
+	reqData := SchemaRequest{}
+
+	// Create API request
+	apiReq := APIRequest{
+		Method:      http.MethodPost,
+		URL:         c.buildURL("/api/databases/%s/schemas", dbID),
+		RequestBody: reqData,
+	}
+
+	// Send request and parse response
+	var response SchemaResponse
+	err := c.sendAPIRequest(apiReq, &response)
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
+		return nil, err
 	}
 
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
+	return &response, nil
+}
 
-	// Send the request
-	resp, err := c.httpClient.Do(req)
+func (c *ExternalAPIClient) GetDatabaseSchemas(dbID uuid.UUID) (*SrcSchemaResponse, error) {
+	apiReq := APIRequest{
+		Method: http.MethodGet,
+		URL:    c.buildURL("/api/databases/%s/src-schemas", dbID),
+	}
+
+	var response SrcSchemaResponse
+	err := c.sendAPIRequest(apiReq, &response)
 	if err != nil {
-		return nil, fmt.Errorf("error sending request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		var errorResp struct {
-			Detail string `json:"detail"`
-		}
-
-		if err := json.NewDecoder(resp.Body).Decode(&errorResp); err != nil {
-			return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-		}
-
-		return nil, fmt.Errorf("API error: %s", errorResp.Detail)
+		return nil, err
 	}
 
-	var projectDatabaseResp ProjectDatabaseResponse
-	if err := json.NewDecoder(resp.Body).Decode(&projectDatabaseResp); err != nil {
-		return nil, fmt.Errorf("error parsing response: %w", err)
-	}
-
-	return &projectDatabaseResp, nil
+	return &response, nil
 }

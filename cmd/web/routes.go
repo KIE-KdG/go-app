@@ -39,6 +39,7 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodGet, "/project/create", protected.ThenFunc(app.projectCreate))
 	router.Handler(http.MethodPost, "/project/create", protected.ThenFunc(app.projectCreatePost))
 	router.Handler(http.MethodPost, "/project/db/setup", protected.ThenFunc(app.projectDatabaseSetupPost))
+	router.Handler(http.MethodPost, "/schema/create", protected.ThenFunc(app.databaseSchemaPost))
 	router.Handler(http.MethodGet, "/project/view/:id", protected.ThenFunc(app.projectView))
 
 	router.Handler(http.MethodGet, "/panel", protected.ThenFunc(app.adminPanel))
