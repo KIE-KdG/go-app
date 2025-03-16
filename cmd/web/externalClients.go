@@ -210,7 +210,7 @@ func (c *ExternalAPIClient) GetDatabaseSchemas(dbID uuid.UUID) (*[]string, error
 	return &response, nil
 }
 
-func (c *ExternalAPIClient) GetSchemaTables(schemaID string) ([]TableInfo, error) {
+func (c *ExternalAPIClient) GetSchemaTables(schemaID uuid.UUID) ([]TableInfo, error) {
 	apiReq := APIRequest{
 		Method: http.MethodGet,
 		URL:    c.buildURL("/api/schemas/%s/tables-detailed", schemaID),

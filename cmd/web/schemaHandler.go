@@ -44,8 +44,8 @@ func (app *application) getSchemaTablesAPI(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Parse database ID
-	_, err := uuid.Parse(dbIDStr)
+	// Parse schema ID
+	schemaID, err := uuid.Parse(schemaName)
 	if err != nil {
 		app.clientError(w, http.StatusBadRequest)
 		return
@@ -58,24 +58,8 @@ func (app *application) getSchemaTablesAPI(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Instead of getting database by ID which doesn't exist, we can directly call the API
-	// We don't need the database details since the schema name is already provided
-
-	// Build the URL for the external API
-	apiURL := fmt.Sprintf("%s/api/schemas/%s/tables-detailed", app.externalAPI.baseURL, schemaName)
-
-	// Create API request
-	apiReq := APIRequest{
-		Method: http.MethodGet,
-		URL:    apiURL,
-		Headers: map[string]string{
-			contentTypeHeader: applicationJSON,
-		},
-	}
-
-	// Call the external API
-	var tablesResponse []TableInfo
-	err = app.externalAPI.sendAPIRequest(apiReq, &tablesResponse)
+	// Use our ExternalAPIClient to get the schema tables
+	tablesResponse, err := app.externalAPI.GetSchemaTables(schemaID)
 	if err != nil {
 		app.errorLog.Printf("Error fetching tables for schema %s: %v", schemaName, err)
 		app.serverError(w, fmt.Errorf("error fetching tables: %w", err))
@@ -117,16 +101,32 @@ func (app *application) saveProjectTables(w http.ResponseWriter, r *http.Request
 	}
 
 	// Parse project ID
-	_, err = uuid.Parse(requestData.ProjectID)
+	projectID, err := uuid.Parse(requestData.ProjectID)
 	if err != nil {
 		app.clientError(w, http.StatusBadRequest)
 		return
 	}
 
-	// Here you would typically save the selected tables to your database
-	// For now, we'll just return a success response
+	// Convert tables to the format expected by SaveSelectedTables
+	selectedTables := make([]map[string]interface{}, len(requestData.Tables))
+	for i, table := range requestData.Tables {
+		selectedTables[i] = map[string]interface{}{
+			"table_id":     table.TableID,
+			"schema_name":  table.SchemaName,
+			"table_name":   table.TableName,
+			"columns":      table.Columns,
+		}
+	}
+
+	// Use our ExternalAPIClient to save the selected tables
+	err = app.externalAPI.SaveSelectedTables(projectID, selectedTables)
+	if err != nil {
+		app.errorLog.Printf("Error saving selected tables: %v", err)
+		app.serverError(w, fmt.Errorf("error saving tables: %w", err))
+		return
+	}
 	
-	// Build response
+	// Build success response
 	responseData := map[string]interface{}{
 		"status":  "success",
 		"message": "Selected tables saved successfully",
