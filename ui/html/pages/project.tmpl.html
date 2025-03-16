@@ -126,7 +126,18 @@
     </div>
   </div>
 
-  {{template "schema_table_form" .}}
+  <!-- Only show the schema form if we have a database connection -->
+  {{if .ProjectDatabase}}
+    {{template "schema_table_form" .}}
+  {{else}}
+    <!-- Show placeholder message when no database connection exists -->
+    <div class="card bg-base-100 shadow-xl mb-6">
+      <div class="card-body text-center">
+        <h2 class="card-title justify-center">Database Search Configuration</h2>
+        <p class="text-base-content/70">Connect a database to enable schema and table configuration.</p>
+      </div>
+    </div>
+  {{end}}
 
   <!-- Project Info Card -->
   <div class="stats shadow-xl mb-6 w-full">
