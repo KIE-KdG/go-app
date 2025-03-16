@@ -3,12 +3,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
+	"github.com/julienschmidt/httprouter"
 	"kdg/be/lab/internal/models"
 	"kdg/be/lab/internal/validator"
 	"net/http"
-
-	"github.com/google/uuid"
-	"github.com/julienschmidt/httprouter"
 )
 
 type projectCreateForm struct {
@@ -137,10 +136,16 @@ type projectForms struct {
 	SchemaForm   schemaSetupForm
 }
 
+// Updated database setup form with individual connection parameters
 type databaseSetupForm struct {
 	ProjectID           string `form:"project_id"`
-	ConnectionString    string `form:"connstring"`
 	DbType              string `form:"dbtype"`
+	Server              string `form:"server"`
+	Port                string `form:"port"`
+	Database            string `form:"database"`
+	Username            string `form:"username"`
+	Password            string `form:"password"`
+	TrustServerCert     bool   `form:"trust_server_cert"`
 	validator.Validator `form:"-"`
 }
 
@@ -149,10 +154,42 @@ type schemaSetupForm struct {
 	validator.Validator `form:"-"`
 }
 
+// GenerateConnectionString creates the appropriate connection string based on database type
+func (form *databaseSetupForm) GenerateConnectionString() (string, error) {
+	switch form.DbType {
+	case "sqlserver":
+		trustServerCert := "no"
+		if form.TrustServerCert {
+			trustServerCert = "yes"
+		}
+		return fmt.Sprintf("DRIVER={ODBC Driver 17 for SQL Server};SERVER=%s,%s;DATABASE=%s;UID=%s;PWD=%s;TrustServerCertificate=%s",
+			form.Server, form.Port, form.Database, form.Username, form.Password, trustServerCert), nil
+
+	case "mysql", "mariadb":
+		return fmt.Sprintf("server=%s;port=%s;database=%s;user=%s;password=%s",
+			form.Server, form.Port, form.Database, form.Username, form.Password), nil
+
+	case "postgres":
+		sslMode := "disable"
+		if !form.TrustServerCert {
+			sslMode = "require"
+		}
+		return fmt.Sprintf("host=%s port=%s dbname=%s user=%s password=%s sslmode=%s",
+			form.Server, form.Port, form.Database, form.Username, form.Password, sslMode), nil
+
+	default:
+		return "", fmt.Errorf("unsupported database type: %s", form.DbType)
+	}
+}
+
 // Handler for database connection setup
 func (app *application) projectDatabaseSetupPost(w http.ResponseWriter, r *http.Request) {
 	// Parse the form
-	var form databaseSetupForm
+	var parent projectForms
+
+	// extract child from parent
+	form := parent.DatabaseForm
+
 	err := app.decodePostForm(r, &form)
 	if err != nil {
 		app.errorLog.Printf("Form decode error: %v", err)
@@ -162,8 +199,12 @@ func (app *application) projectDatabaseSetupPost(w http.ResponseWriter, r *http.
 
 	// Validate form fields
 	form.CheckField(validator.NotBlank(form.ProjectID), "project_id", "Project ID is required")
-	form.CheckField(validator.NotBlank(form.ConnectionString), "connstring", "Connection string cannot be empty")
-	form.CheckField(validator.NotBlank(form.DbType), "dbtype", "Database type cannot be empty")
+	form.CheckField(validator.NotBlank(form.DbType), "dbtype", "Database type is required")
+	form.CheckField(validator.NotBlank(form.Server), "server", "Server host is required")
+	form.CheckField(validator.NotBlank(form.Port), "port", "Port is required")
+	form.CheckField(validator.NotBlank(form.Database), "database", "Database name is required")
+	form.CheckField(validator.NotBlank(form.Username), "username", "Username is required")
+	form.CheckField(validator.NotBlank(form.Password), "password", "Password is required")
 
 	// Parse project ID
 	projectID, err := uuid.Parse(form.ProjectID)
@@ -203,8 +244,18 @@ func (app *application) projectDatabaseSetupPost(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Generate connection string on the backend
+	connectionString, err := form.GenerateConnectionString()
+	if err != nil {
+		app.errorLog.Printf("Failed to generate connection string: %v", err)
+		form.AddNonFieldError(fmt.Sprintf("Database configuration error: %v", err))
+		app.renderFormErrors(w, r, form, "project.tmpl.html")
+		return
+	}
+
+	// Save the database configuration
 	// All validation passed, create database connection
-	_, err = app.externalAPI.CreateProjectDatabase(projectID, form.ConnectionString, form.DbType)
+	_, err = app.externalAPI.CreateProjectDatabase(projectID, connectionString, form.DbType)
 	if err != nil {
 		app.errorLog.Printf("Database connection creation error: %v", err)
 		app.serverError(w, err)

@@ -69,42 +69,28 @@
         {{if .HasDocuments}}
         <!-- Show database setup option only if documents exist -->
         <p class="text-base-content/70 text-center mb-4">Connect your project to a database to enable queries.</p>
-        
+
         <form action="/project/db/setup" method="post" novalidate class="w-full max-w-md">
           <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
           <input type='hidden' name='project_id' value='{{.Project.ID}}'>
-        
+
           <!-- Use the correct form field path for errors -->
           {{with .Form.DatabaseForm}}
-            {{range .NonFieldErrors}}
-            <div class='alert alert-error mb-4'>{{.}}</div>
-            {{end}}
+          {{range .NonFieldErrors}}
+          <div class='alert alert-error mb-4'>{{.}}</div>
           {{end}}
-        
+          {{end}}
+
           <div class="space-y-4">
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">Connection String</span>
-              </label>
-        
-              <input type='text' name='connstring' value='{{with .Form.DatabaseForm}}{{.ConnectionString}}{{end}}' 
-                      class="input input-bordered w-full" placeholder="Connection String">
-              {{with .Form.DatabaseForm.FieldErrors.connstring}}
-              <label class='label'>
-                <span class='label-text-alt text-error'>{{.}}</span>
-              </label>
-              {{end}}
-            </div>
-        
             <div class="form-control">
               <label class="label">
                 <span class="label-text">Database Type</span>
               </label>
               <select name='dbtype' class="select select-bordered w-full">
-                <option value="" >Select Database Type</option>
-                <option value="postgres" >PostgreSQL</option>
-                <option value="mysql">MySQL</option>
-                <option value="sqlserver">SQL Server</option>
+                <option value="" selected disabled>Select Database Type</option>
+                <option value="sqlserver" {{if eq .Form.DatabaseForm.DbType "sqlserver"}}selected{{end}}>SQL Server</option>
+                <option value="mysql" {{if eq .Form.DatabaseForm.DbType "mysql"}}selected{{end}}>MySQL/MariaDB</option>
+                <option value="postgres" {{if eq .Form.DatabaseForm.DbType "postgres"}}selected{{end}}>PostgreSQL</option>
               </select>
               {{with .Form.DatabaseForm.FieldErrors.dbtype}}
               <label class='label'>
@@ -112,7 +98,83 @@
               </label>
               {{end}}
             </div>
-        
+
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Server Host</span>
+              </label>
+              <input type='text' name='server' value='{{.Form.DatabaseForm.Server}}'
+                     class="input input-bordered w-full" placeholder="localhost">
+              {{with .Form.DatabaseForm.FieldErrors.server}}
+              <label class='label'>
+                <span class='label-text-alt text-error'>{{.}}</span>
+              </label>
+              {{end}}
+            </div>
+
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Port</span>
+              </label>
+              <input type='text' name='port' value='{{.Form.DatabaseForm.Port}}'
+                     class="input input-bordered w-full" placeholder="1433">
+              {{with .Form.DatabaseForm.FieldErrors.port}}
+              <label class='label'>
+                <span class='label-text-alt text-error'>{{.}}</span>
+              </label>
+              {{end}}
+            </div>
+
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Database Name</span>
+              </label>
+              <input type='text' name='database' value='{{.Form.DatabaseForm.Database}}'
+                     class="input input-bordered w-full" placeholder="GeoData">
+              {{with .Form.DatabaseForm.FieldErrors.database}}
+              <label class='label'>
+                <span class='label-text-alt text-error'>{{.}}</span>
+              </label>
+              {{end}}
+            </div>
+
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Username</span>
+              </label>
+              <input type='text' name='username' value='{{.Form.DatabaseForm.Username}}'
+                     class="input input-bordered w-full" placeholder="SA">
+              {{with .Form.DatabaseForm.FieldErrors.username}}
+              <label class='label'>
+                <span class='label-text-alt text-error'>{{.}}</span>
+              </label>
+              {{end}}
+            </div>
+
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Password</span>
+              </label>
+              <input type='password' name='password' value='{{.Form.DatabaseForm.Password}}'
+                     class="input input-bordered w-full" placeholder="•••••••••••••">
+              {{with .Form.DatabaseForm.FieldErrors.password}}
+              <label class='label'>
+                <span class='label-text-alt text-error'>{{.}}</span>
+              </label>
+              {{end}}
+            </div>
+
+            <div class="form-control">
+              <label class="label flex justify-between">
+                <span class="label-text">SSL/TLS Options</span>
+              </label>
+              <div class="flex gap-2 items-center">
+                <input type="checkbox" name="trust_server_cert" id="trust_server_cert"
+                       class="checkbox checkbox-sm" {{if .Form.DatabaseForm.TrustServerCert}}checked{{end}}>
+                <label for="trust_server_cert" class="label-text">Trust server certificate</label>
+              </div>
+            </div>
+
             <div class="card-actions justify-center mt-4">
               <button type='submit' class="btn btn-primary w-full">Connect Database</button>
             </div>
