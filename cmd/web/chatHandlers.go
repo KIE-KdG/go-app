@@ -22,13 +22,22 @@ func (app *application) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Retrieve user's chats
 	chats, err := app.chats.RetrieveByUserId(userID)
 	if err != nil {
 		app.serverError(w, err)
 		return
 	}
 
+	// Retrieve messages for this chat
 	messages, err := app.messages.GetByChatID(uuid)
+	if err != nil {
+		app.serverError(w, err)
+		return
+	}
+
+	// Fetch user's projects for the dropdown
+	projects, err := app.projects.GetByUserID(userID)
 	if err != nil {
 		app.serverError(w, err)
 		return
@@ -40,10 +49,11 @@ func (app *application) chat(w http.ResponseWriter, r *http.Request) {
 	data := app.newTemplateData(r)
 	data.Chats = chats
 	data.Messages = messages
+	data.Projects = projects
+	data.UserID = userID.String() // Pass user ID to template for JavaScript
 
 	app.render(w, http.StatusOK, "home.tmpl.html", data)
 }
-
 func (app *application) newChatPost(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIdFromSession(r)
 

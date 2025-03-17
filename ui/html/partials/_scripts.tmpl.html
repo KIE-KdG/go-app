@@ -1,11 +1,11 @@
 // Check scroll position to show/hide scroll button
-      checkScroll() {
-        const chatMessages = document.getElementById('chatMessages');
-        if (chatMessages) {
-          // Show button if user has scrolled up at least 200px from bottom
-          this.showScrollButton = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight > 200;
-        }
-      },{{define "scripts"}}
+checkScroll() {
+const chatMessages = document.getElementById('chatMessages');
+if (chatMessages) {
+// Show button if user has scrolled up at least 200px from bottom
+this.showScrollButton = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight > 200;
+}
+},{{define "scripts"}}
 <script>
   // Load marked.js for Markdown rendering
   if (!window.marked) {
@@ -30,7 +30,11 @@
       showScrollButton: false,
       responseStartTime: null,
       isLargeScreen: false,
-      
+
+      // Project related properties
+      selectedProjectId: null,
+      selectedProjectName: 'No Project',
+
       // Map related properties
       hasMap: false,
       mapVisible: false,
@@ -41,36 +45,36 @@
       mapInstance: null,
       mapTileLayers: {},
       thumbnailMaps: {},
-      
+
       init() {
         // Initialize WebSocket
         this.connectWebSocket();
-        
+
         // Track window width for responsive design
         this.checkWindowSize = () => {
           this.isLargeScreen = window.innerWidth >= 1024;
         };
-        
+
         // Set up event listeners and initialize UI
         this.$nextTick(() => {
           this.scrollToBottom();
           this.autoResizeTextarea();
           this.checkWindowSize();
-          
+
           // Initialize main map once DOM is loaded (after a short delay to ensure DOM is ready)
           setTimeout(() => {
             this.initializeMainMap();
-            
+
             // Listen for resize events to refresh maps and check screen size
             window.addEventListener('resize', () => {
               this.refreshMap();
               this.checkWindowSize();
             });
-            
+
             // Listen for toggle-map event
             this.$el.addEventListener('toggle-map', () => {
               this.mapVisible = !this.mapVisible;
-              
+
               // Give the map a moment to render then refresh it
               if (this.mapVisible && this.mapInstance) {
                 setTimeout(() => {
@@ -78,7 +82,7 @@
                 }, 300);
               }
             });
-            
+
             // Add a watcher for mapVisible changes (new code)
             this.$watch('mapVisible', (visible) => {
               if (visible && this.mapInstance) {
@@ -90,7 +94,7 @@
           }, 200);
         });
       },
-      
+
       // Initialize the main map with no data yet
       initializeMainMap() {
         // Check if we already have a map instance
@@ -98,13 +102,13 @@
           console.log("Map already initialized, skipping");
           return;
         }
-        
+
         const mapContainer = document.getElementById('main-map-container');
         if (!mapContainer) {
           console.error("Map container not found");
           return;
         }
-        
+
         try {
           // Create map with default view centered on Belgium
           const map = L.map('main-map-container', {
@@ -112,10 +116,10 @@
             zoom: 8,
             zoomControl: true
           });
-          
+
           // Store reference
           this.mapInstance = map;
-          
+
           // Setup basemaps
           this.mapTileLayers = {
             osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -128,22 +132,22 @@
               attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://opentopomap.org">OpenTopoMap</a>'
             })
           };
-          
+
           // Add default basemap
           this.mapTileLayers.osm.addTo(map);
-          
+
           console.log("Main map initialized successfully");
         } catch (e) {
           console.error("Error initializing main map:", e);
         }
       },
-      
+
       // Refresh map size when container dimensions change
       refreshMap() {
         if (this.mapInstance) {
           this.mapInstance.invalidateSize();
         }
-        
+
         // Also refresh thumbnails
         Object.values(this.thumbnailMaps).forEach(map => {
           if (map) {
@@ -151,7 +155,7 @@
           }
         });
       },
-      
+
       // Initialize a thumbnail map for the collection view
       initThumbnailMap(containerId, geoJSON) {
         setTimeout(() => {
@@ -160,13 +164,13 @@
             console.error("Thumbnail container not found:", containerId);
             return;
           }
-          
+
           try {
             // Check if map already exists
             if (this.thumbnailMaps[containerId]) {
               return;
             }
-            
+
             // Create minimal map with no controls
             const map = L.map(containerId, {
               zoomControl: false,
@@ -181,17 +185,17 @@
               center: [51.05, 3.7],
               zoom: 4
             });
-            
+
             // Add a simple basemap
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
               attribution: ''
             }).addTo(map);
-            
+
             // Add the GeoJSON if provided
             if (geoJSON) {
               this.addGeoJSONToMap(map, geoJSON);
             }
-            
+
             // Store reference
             this.thumbnailMaps[containerId] = map;
           } catch (e) {
@@ -199,27 +203,27 @@
           }
         }, 100);
       },
-      
+
       // Show GeoJSON from a message on the map
       showMessageGeoJSON(messageIndex, geoJSON, messageText) {
         if (!geoJSON) {
           console.error("Cannot show map - no GeoJSON data provided");
           return;
         }
-        
+
         // Make sure map is initialized
         if (!this.mapInstance) {
           this.initializeMainMap();
         }
-        
+
         // Mark that we have a map
         this.hasMap = true;
-        
+
         try {
           // Check if we already have this GeoJSON in our collection
-          const existingIndex = this.mapCollection.findIndex(item => 
+          const existingIndex = this.mapCollection.findIndex(item =>
             JSON.stringify(item.geoJSON) === JSON.stringify(geoJSON));
-          
+
           if (existingIndex >= 0) {
             // If we already have it, just select it
             this.selectMap(existingIndex);
@@ -233,18 +237,18 @@
               timestamp: new Date(),
               featureCount: this.countGeoJSONFeatures(geoJSON)
             });
-            
+
             // Select the newly added map
             this.selectMap(this.mapCollection.length - 1);
           }
-          
+
           // Show the map if it's hidden
           this.mapVisible = true;
         } catch (e) {
           console.error("Error showing GeoJSON:", e);
         }
       },
-      
+
       // Count features in a GeoJSON object
       countGeoJSONFeatures(geoJSON) {
         try {
@@ -252,7 +256,7 @@
           if (typeof geoJSON === 'string') {
             data = JSON.parse(geoJSON);
           }
-          
+
           if (data.features && Array.isArray(data.features)) {
             return data.features.length;
           } else if (data.type === 'Feature') {
@@ -261,36 +265,36 @@
         } catch (e) {
           console.error("Error counting features:", e);
         }
-        
+
         return 0;
       },
-      
+
       // Select a specific map from the collection
       selectMap(index) {
         if (index < 0 || index >= this.mapCollection.length) {
           console.error("Invalid map index:", index);
           return;
         }
-        
+
         this.currentMapIndex = index;
         this.currentMap = this.mapCollection[index];
-        
+
         // Make sure map instance exists
         if (!this.mapInstance) {
           console.log("Map instance not ready, initializing");
           this.initializeMainMap();
         }
-        
+
         if (this.mapInstance) {
           // Clear current map layers
           this.clearMapLayers();
-          
+
           // Add the selected GeoJSON to the map
           this.addGeoJSONToMap(this.mapInstance, this.currentMap.geoJSON);
         } else {
           console.error("Cannot display map - map instance is not available");
         }
-        
+
         // Create thumbnail maps if needed
         this.$nextTick(() => {
           for (let i = 0; i < this.mapCollection.length; i++) {
@@ -301,25 +305,25 @@
           }
         });
       },
-      
+
       // Navigate to previous map
       previousMap() {
         if (this.currentMapIndex > 0) {
           this.selectMap(this.currentMapIndex - 1);
         }
       },
-      
+
       // Navigate to next map
       nextMap() {
         if (this.currentMapIndex < this.mapCollection.length - 1) {
           this.selectMap(this.currentMapIndex + 1);
         }
       },
-      
+
       // Clear all layers from the map
       clearMapLayers() {
         if (!this.mapInstance) return;
-        
+
         this.mapInstance.eachLayer(layer => {
           // Don't remove the base tile layer
           if (!(layer instanceof L.TileLayer)) {
@@ -327,25 +331,25 @@
           }
         });
       },
-      
+
       // Change the map style/basemap
       changeMapStyle(style, containerId) {
         if (!this.mapInstance) return;
-        
+
         // Handle different map containers
         let targetMap = this.mapInstance;
-        
+
         if (containerId !== 'main-map-container' && this.thumbnailMaps[containerId]) {
           targetMap = this.thumbnailMaps[containerId];
         }
-        
+
         // Remove all existing tile layers
         targetMap.eachLayer(layer => {
           if (layer instanceof L.TileLayer) {
             targetMap.removeLayer(layer);
           }
         });
-        
+
         // Add the selected tile layer
         if (style === 'satellite') {
           this.mapTileLayers.satellite.addTo(targetMap);
@@ -356,22 +360,22 @@
           this.mapTileLayers.osm.addTo(targetMap);
         }
       },
-      
+
       // Format a timestamp for display
       formatTimestamp(timestamp) {
         if (!timestamp) return '';
-        
+
         const date = new Date(timestamp);
         return date.toLocaleTimeString();
       },
-      
+
       // Add GeoJSON to map with full error handling
       addGeoJSONToMap(map, geoJSONData) {
         if (!map || !geoJSONData) {
           console.error("Invalid map or GeoJSON data");
           return;
         }
-        
+
         try {
           // Parse string GeoJSON if needed
           let geoJSON = geoJSONData;
@@ -383,13 +387,13 @@
               return;
             }
           }
-          
+
           // Validate structure
           if (!geoJSON || !geoJSON.type) {
             console.error("Invalid GeoJSON data");
             return;
           }
-          
+
           // Handle single geometries or features
           if (geoJSON.type !== 'FeatureCollection' && geoJSON.type !== 'Feature') {
             // Wrap geometry in a Feature
@@ -399,7 +403,7 @@
               properties: {}
             };
           }
-          
+
           // Wrap single features in a FeatureCollection
           if (geoJSON.type === 'Feature') {
             geoJSON = {
@@ -407,19 +411,19 @@
               features: [geoJSON]
             };
           }
-          
+
           // Ensure features array exists
           if (!Array.isArray(geoJSON.features)) {
             console.error("Invalid FeatureCollection: missing features array");
             return;
           }
-          
+
           // Skip if empty
           if (geoJSON.features.length === 0) {
             console.warn("Empty FeatureCollection");
             return;
           }
-          
+
           // Create styled GeoJSON layer
           const geoJSONLayer = L.geoJSON(geoJSON, {
             style: (feature) => ({
@@ -445,12 +449,12 @@
                 const popupContent = Object.entries(feature.properties)
                   .map(([key, value]) => `<strong>${key}:</strong> ${value}`)
                   .join('<br>');
-                
+
                 if (popupContent) {
                   layer.bindPopup(popupContent);
                 }
               }
-              
+
               // Add click handler to show feature details
               layer.on('click', (e) => {
                 this.selectedFeatureInfo = feature.properties || {};
@@ -459,7 +463,7 @@
               });
             }
           }).addTo(map);
-          
+
           // Fit map to bounds
           try {
             const bounds = geoJSONLayer.getBounds();
@@ -473,11 +477,11 @@
           console.error("Error adding GeoJSON to map:", e);
         }
       },
-      
+
       // Get color for feature based on properties
       getColorForFeature(feature) {
         if (!feature.properties) return '#3388ff';
-        
+
         // Color by type
         if (feature.properties.type) {
           const type = feature.properties.type.toLowerCase();
@@ -489,7 +493,7 @@
             return '#CD5C5C';
           }
         }
-        
+
         // Color by geometry type
         if (feature.geometry && feature.geometry.type) {
           switch (feature.geometry.type) {
@@ -504,65 +508,63 @@
               return '#33CC33';
           }
         }
-        
+
         return '#3388ff'; // Default blue
       },
-      
-      // WebSocket connection management
+
       connectWebSocket() {
         const chatID = window.location.pathname.split("/")[2];
         this.ws = new WebSocket(`wss://localhost:4000/ws/chat/${chatID}`);
-      
+
         this.ws.addEventListener('open', () => {
           console.log('WebSocket connection established');
           this.reconnectAttempts = 0;
         });
-      
+
         this.ws.addEventListener('message', (event) => {
           this.handleWebSocketMessage(event);
         });
-        
+
         this.ws.addEventListener('close', (event) => {
           console.log('WebSocket connection closed', event);
-      
+
           // Handle interruption of active processing
           if (this.isProcessing) {
             if (this.currentResponse) {
               this.currentResponse.statusUpdates.push("Connection closed unexpectedly. Please try again.");
               this.currentResponse.answer = this.currentResponse.answer || "Response interrupted. Please try again.";
-      
+
               if (this.responseStartTime) {
                 const responseTime = new Date() - this.responseStartTime;
                 this.currentResponse.responseTime = this.formatResponseTime(responseTime) + " (incomplete)";
                 this.responseStartTime = null;
               }
-      
+
               this.currentResponse = null;
             }
             this.isProcessing = false;
           }
-      
+
           // Attempt to reconnect
           if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
             const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), 10000);
             console.log(`Attempting to reconnect in ${delay}ms...`);
-      
+
             this.reconnectTimeout = setTimeout(() => {
               this.reconnectAttempts++;
               this.connectWebSocket();
             }, delay);
           }
         });
-      
+
         this.ws.addEventListener('error', (error) => {
           console.error('WebSocket error:', error);
         });
       },
-      
       // Message handling
       sendMessage() {
         if (!this.inputMessage.trim() || this.isProcessing) return;
-  
+
         // Check WebSocket state
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
           console.error('WebSocket is not open');
@@ -572,64 +574,132 @@
           this.connectWebSocket();
           return;
         }
-  
+
         this.isProcessing = true;
         this.responseStartTime = new Date();
-  
+
         this.messages.push({
           sender: 'You',
           text: this.inputMessage
         });
-  
+
         this.messages.push({
           sender: 'AI',
           statusUpdates: [],
           answer: '',
           geoJSON: null
         });
-  
+
         this.currentResponse = this.messages[this.messages.length - 1];
-  
+
+        // Get the current user ID from session
+        const userID = document.getElementById('current-user-id')?.value;
+
+        // Get database ID if available
+        let databaseID = null;
+        if (this.selectedProjectId && this.dbUsed) {
+          // This would need to be populated with the database ID for the selected project
+          // For now, we're sending a null value
+          databaseID = document.getElementById(`db-id-${this.selectedProjectId}`)?.value;
+        }
+
+        // Send message with all relevant parameters
         this.ws.send(JSON.stringify({
           message: this.inputMessage,
           dbUsed: this.dbUsed,
-          docsUsed: this.docsUsed
+          docsUsed: this.docsUsed,
+          user_id: userID,
+          database_id: databaseID,
+          project_id: this.selectedProjectId
         }));
-  
+
         this.inputMessage = '';
         this.$nextTick(() => {
           this.scrollToBottom();
           this.autoResizeTextarea();
         });
       },
-      
+
+      selectProject(projectId, projectName) {
+        this.selectedProjectId = projectId;
+        this.selectedProjectName = projectName || 'No Project';
+      },
+
+      init() {
+        // Initialize WebSocket
+        this.connectWebSocket();
+
+        // Track window width for responsive design
+        this.checkWindowSize = () => {
+          this.isLargeScreen = window.innerWidth >= 1024;
+        };
+
+        // Set up event listeners and initialize UI
+        this.$nextTick(() => {
+          this.scrollToBottom();
+          this.autoResizeTextarea();
+          this.checkWindowSize();
+
+          // Initialize main map once DOM is loaded
+          setTimeout(() => {
+            this.initializeMainMap();
+
+            // Listen for resize events to refresh maps and check screen size
+            window.addEventListener('resize', () => {
+              this.refreshMap();
+              this.checkWindowSize();
+            });
+
+            // Listen for toggle-map event
+            this.$el.addEventListener('toggle-map', () => {
+              this.mapVisible = !this.mapVisible;
+
+              // Give the map a moment to render then refresh it
+              if (this.mapVisible && this.mapInstance) {
+                setTimeout(() => {
+                  this.mapInstance.invalidateSize();
+                }, 300);
+              }
+            });
+
+            // Add a watcher for mapVisible changes
+            this.$watch('mapVisible', (visible) => {
+              if (visible && this.mapInstance) {
+                setTimeout(() => {
+                  this.mapInstance.invalidateSize();
+                }, 300);
+              }
+            });
+          }, 200);
+        });
+      },
       // Interrupt message generation
       interruptGeneration() {
         if (this.ws && this.ws.readyState === WebSocket.OPEN && this.isProcessing) {
           this.ws.send(JSON.stringify({
             interrupt: true
           }));
-          
+
           if (this.currentResponse) {
             this.currentResponse.statusUpdates.push("Generation interrupted by user.");
-            
+
             if (this.responseStartTime) {
               const responseTime = new Date() - this.responseStartTime;
               this.currentResponse.responseTime = this.formatResponseTime(responseTime) + " (interrupted)";
               this.responseStartTime = null;
             }
-            
+
             if (!this.currentResponse.answer) {
               this.currentResponse.answer = "*Generation was interrupted.*";
             }
-            
+
             this.currentResponse = null;
           }
-          
+
           this.isProcessing = false;
         }
       },
-  
+
       // WebSocket message handling
       handleWebSocketMessage(event) {
         let data = {};
@@ -640,29 +710,29 @@
           console.error('Error parsing JSON:', event.data, e);
           return;
         }
-      
+
         // Handle interruption acknowledgment
         if (data.interrupted) {
           console.log("Server acknowledged interruption");
           this.isProcessing = false;
-          
+
           if (this.currentResponse) {
             if (!this.currentResponse.answer) {
               this.currentResponse.answer = "*Generation was interrupted.*";
             }
-            
+
             if (this.responseStartTime) {
               const responseTime = new Date() - this.responseStartTime;
               this.currentResponse.responseTime = this.formatResponseTime(responseTime) + " (interrupted)";
               this.responseStartTime = null;
             }
-            
+
             this.currentResponse = null;
           }
-          
+
           return;
         }
-      
+
         // Create response object if it doesn't exist yet
         if (!this.currentResponse) {
           this.messages.push({
@@ -673,12 +743,12 @@
           });
           this.currentResponse = this.messages[this.messages.length - 1];
         }
-      
+
         // Handle status updates
         if (data.status && data.status.trim()) {
           this.currentResponse.statusUpdates.push(data.status.trim());
         }
-      
+
         // Handle error messages
         if (data.error) {
           this.currentResponse.statusUpdates.push(`Error: ${data.error}`);
@@ -687,12 +757,12 @@
           this.currentResponse = null;
           return;
         }
-      
+
         // Handle final responses with content
         if (data.answer || data.response) {
           const responseText = data.answer || data.response;
           this.currentResponse.answer = responseText;
-          
+
           // Calculate response time
           if (this.responseStartTime) {
             const responseTime = new Date() - this.responseStartTime;
@@ -700,26 +770,26 @@
             this.responseStartTime = null;
           }
         }
-      
+
         // Process GeoJSON data if present AND not already present
         // This is the key change - only set geoJSON if it's not already set
         if (data.geoJSON && !this.currentResponse.geoJSON) {
           console.log("Received GeoJSON data");
-          
+
           // Store the GeoJSON with the message
           this.currentResponse.geoJSON = data.geoJSON;
-          
+
           // Mark that we have map data
           this.hasMap = true;
         }
-        
+
         // Handle message completion
         if ((data.answer || data.response) && !data.status) {
           // Message is complete
           this.isProcessing = false;
           this.currentResponse = null;
         }
-      
+
         // Scroll to the latest message
         this.$nextTick(() => {
           this.scrollToBottom();
@@ -732,14 +802,14 @@
           chatMessages.scrollTop = chatMessages.scrollHeight;
         }
       },
-  
+
       checkScroll() {
         const chatMessages = document.getElementById('chatMessages');
         if (chatMessages) {
           this.showScrollButton = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight > 200;
         }
       },
-  
+
       formatResponseTime(milliseconds) {
         if (milliseconds < 1000) {
           return `${milliseconds}ms`;
@@ -751,7 +821,7 @@
           return `${minutes}m ${seconds}s`;
         }
       },
-  
+
       formatMarkdown(text) {
         if (!text) return '';
         if (window.marked) {
@@ -764,7 +834,7 @@
         }
         return text;
       },
-  
+
       autoResizeTextarea() {
         const textarea = this.$refs.messageInput;
         if (textarea) {

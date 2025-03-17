@@ -29,6 +29,7 @@ type templateData struct {
 	RegisteredSchemas []RegisteredSchema
 	Files             []*models.File
 	HasDocuments      bool
+	UserID            string // Added UserID field
 }
 
 func humanDate(t time.Time) string {

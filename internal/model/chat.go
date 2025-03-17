@@ -11,6 +11,7 @@ type ChatPort struct {
 }
 
 // ChatRequest represents the new schema for chat requests
+// ChatRequest represents the new schema for chat requests
 type ChatRequest struct {
 	Question   string `json:"question"`
 	Message    string `json:"message,omitempty"` // For backward compatibility
@@ -19,6 +20,7 @@ type ChatRequest struct {
 	DatabaseID string `json:"database_id,omitempty"`
 	UserID     string `json:"user_id,omitempty"`
 	ChatID     string `json:"chat_id,omitempty"`
+	ProjectID  string `json:"project_id,omitempty"` // Added ProjectID field
 }
 
 // ForwardMessageWithStream sends a message to the connected websocket server
@@ -31,6 +33,7 @@ func (c *ChatPort) ForwardMessageWithStream(
 	databaseID string,
 	userID string,
 	chatID string,
+	projectID string, // Added projectID parameter
 ) (<-chan string, error) {
 	otherServer := "ws://localhost" + c.Port + "/ws/chat"
 	conn, _, err := websocket.DefaultDialer.Dial(otherServer, nil)
@@ -47,6 +50,7 @@ func (c *ChatPort) ForwardMessageWithStream(
 		DatabaseID: databaseID,
 		UserID:     userID,
 		ChatID:     chatID,
+		ProjectID:  projectID, // Include projectID in the request
 	}
 
 	jsonMsg, err := json.Marshal(req)

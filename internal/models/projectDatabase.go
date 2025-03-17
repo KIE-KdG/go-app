@@ -7,6 +7,10 @@ import (
 	"github.com/google/uuid"
 )
 
+type DatabaseProject struct {
+	ID uuid.UUID
+}
+
 type ProjectDatabase struct {
 	ID               uuid.UUID
 	ConnectionString string
@@ -47,4 +51,25 @@ func (m *ProjectDatabaseModel) GetByProjectID(id uuid.UUID) (*ProjectDatabase, e
 	}
 	
 	return &projectDatabase, nil
+}
+
+
+func (m *ProjectDatabaseModel) GetDbIDFromProject(id uuid.UUID) (*uuid.UUID, error) {
+	stmt := `select d.id from databases d where d.project_id = $1`
+
+	var databaseProject DatabaseProject
+
+	err := m.DB.QueryRow(stmt, id).Scan(
+		&databaseProject.ID,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNoRecord
+		}
+		return nil, err
+	}
+
+
+
+	return &databaseProject.ID, nil
 }

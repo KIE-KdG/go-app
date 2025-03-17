@@ -11,6 +11,25 @@
       </div>
 
       <div class="card-actions justify-start mt-2">
+        <!-- Project Selector Dropdown -->
+        <div class="dropdown dropdown-top mr-2">
+          <label tabindex="0" class="btn btn-outline rounded-full items-center flex gap-1"
+                :class="{'btn-primary': selectedProjectId}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span x-text="selectedProjectName || 'Select Project'"></span>
+          </label>
+          <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52 max-h-60 overflow-y-auto">
+            <li><a @click="selectProject(null, 'No Project')" :class="{'active': !selectedProjectId}">No Project</a></li>
+            <div class="divider my-1"></div>
+            {{range .Projects}}
+            <li><a @click="selectProject('{{.ID}}', '{{.Name}}')" :class="{'active': selectedProjectId === '{{.ID}}'}">{{.Name}}</a></li>
+            {{end}}
+          </ul>
+        </div>
+
         <label class="flex min-w-8 h-9"
           :class="{'btn': true, 'btn-primary': dbUsed, 'btn-outline': !dbUsed, 'rounded-full': true, 'opacity-75 cursor-not-allowed': isProcessing}">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
@@ -22,6 +41,7 @@
           <input type="checkbox" x-model="dbUsed" class="hidden" :disabled="isProcessing">
           DB
         </label>
+        
         <label class="flex min-w-8 h-9"
           :class="{'btn': true, 'btn-primary': docsUsed, 'btn-outline': !docsUsed, 'rounded-full': true, 'opacity-75 cursor-not-allowed': isProcessing}">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"

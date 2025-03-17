@@ -1,8 +1,7 @@
 {{define "chat"}}
-<div class="min-h-screen flex flex-col" 
-     x-data="chatApp()" 
-     x-init="init()">
-  
+<div class="min-h-screen flex flex-col" x-data="chatApp()" x-init="init()">
+  <input type="hidden" id="current-user-id" value="{{.UserID}}">
+
   <!-- Main container with a central layout -->
   <div class="container mx-auto flex flex-col flex-1">
     <!-- Chat messages container (always centered) -->
@@ -14,26 +13,24 @@
         {{template "chat_input" .}}
       </div>
     </div>
-    
+
     <!-- Map panel (fixed position on the right side) -->
-    <div x-show="mapVisible && hasMap" 
-         x-transition:enter="transition ease-out duration-300"
-         x-transition:enter-start="opacity-0 transform translate-x-full"
-         x-transition:enter-end="opacity-100 transform translate-x-0"
-         x-transition:leave="transition ease-in duration-200"
-         x-transition:leave-start="opacity-100 transform translate-x-0" 
-         x-transition:leave-end="opacity-0 transform translate-x-full"
-         class="fixed right-0 top-0 bottom-0 w-96 z-10 shadow-lg border-l border-gray-200 dark:border-gray-700 bg-base-100 dark:bg-gray-800">
+    <div x-show="mapVisible && hasMap" x-transition:enter="transition ease-out duration-300"
+      x-transition:enter-start="opacity-0 transform translate-x-full"
+      x-transition:enter-end="opacity-100 transform translate-x-0" x-transition:leave="transition ease-in duration-200"
+      x-transition:leave-start="opacity-100 transform translate-x-0"
+      x-transition:leave-end="opacity-0 transform translate-x-full"
+      class="fixed right-0 top-0 bottom-0 w-96 z-10 shadow-lg border-l border-gray-200 dark:border-gray-700 bg-base-100 dark:bg-gray-800">
       {{template "enhanced_map_panel" .}}
     </div>
   </div>
-  
+
   <!-- Scroll to bottom button -->
   <button @click="scrollToBottom()" x-show="showScrollButton"
     class="fixed bottom-24 right-4 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 shadow-lg z-20"
     aria-label="Scroll to bottom">
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="bevel">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="bevel">
       <path d="M12 5v14M5 12l7 7 7-7" />
     </svg>
   </button>
