@@ -28,7 +28,7 @@
                     <select name="schemaName" id="schemaName" class="select select-bordered w-full h-40" size="5" multiple>
                         <!-- Show schema options with ID as value and name as display text -->
                         {{range .SchemaList}}
-                        <option value="{{.ID}}">{{.Name}}</option>
+                        <option value="{{.}}">{{.}}</option>
                         {{end}}
                     </select>
                     <label class="label">
