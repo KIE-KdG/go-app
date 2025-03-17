@@ -184,6 +184,40 @@
                         <div class="space-y-4" id="tables-container">
                             <!-- Will be populated by JavaScript -->
                         </div>
+
+                        <!-- Pagination controls -->
+                        <div class="flex justify-center mt-6" id="tables-pagination">
+                            <div class="join">
+                                <button class="join-item btn btn-sm" id="prev-page-btn">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="m15 18-6-6 6-6"/>
+                                    </svg>
+                                </button>
+                                <div class="join-item flex items-center px-4 bg-base-200">
+                                    Page <span id="current-page" class="mx-1">1</span> of <span id="total-pages" class="mx-1">1</span>
+                                </div>
+                                <button class="join-item btn btn-sm" id="next-page-btn">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="m9 18 6-6-6-6"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Page size selector -->
+                        <div class="flex justify-center mt-3">
+                            <div class="form-control">
+                                <label class="label cursor-pointer">
+                                    <span class="label-text mr-2">Tables per page:</span>
+                                    <select id="page-size-selector" class="select select-sm select-bordered">
+                                        <option value="5">5</option>
+                                        <option value="10" selected>10</option>
+                                        <option value="25">25</option>
+                                        <option value="50">50</option>
+                                    </select>
+                                </label>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Submit Button for selected tables -->
@@ -296,6 +330,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const filterNotSelectedBtn = document.getElementById('filterNotSelectedBtn');
     const resetFiltersBtn = document.getElementById('resetFiltersBtn');
     
+    // Pagination controls
+    const prevPageBtn = document.getElementById('prev-page-btn');
+    const nextPageBtn = document.getElementById('next-page-btn');
+    const pageSizeSelector = document.getElementById('page-size-selector');
+    
+    // Pagination state
+    let currentPage = 1;
+    let tablesPerPage = 10;
+    let filteredTables = [];
+    
     // Track already selected tables and schemas (for visual indicators)
     let selectedTables = new Set();
     let availableSchemas = new Set();
@@ -331,6 +375,10 @@ document.addEventListener('DOMContentLoaded', function() {
             tablesLoading.classList.remove('hidden');
             tablesError.classList.add('hidden');
             tablesContainer.innerHTML = '';
+            
+            // Reset pagination to page 1
+            currentPage = 1;
+            document.getElementById('current-page').textContent = currentPage;
             
             // Get selected schemas from metadata dropdown
             const schemaSelect = document.getElementById('metadataSchemaName');
@@ -433,7 +481,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Function to render tables
+    // Function to render tables with pagination
     function renderTables(tables) {
         console.log("Rendering tables:", tables);
         
@@ -443,10 +491,16 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!tables || tables.length === 0) {
             noTablesMessage.classList.remove('hidden');
+            document.getElementById('tables-pagination').classList.add('hidden');
             return;
         }
         
         noTablesMessage.classList.add('hidden');
+        
+        // Store all tables for filtering/pagination
+        allTables = tables;
+        // Apply current filters to get filtered tables
+        applyTableFilters(false); // false means don't render yet, just filter
         
         // Get templates
         const tableTemplate = document.getElementById('table-entry-template');
@@ -459,8 +513,35 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Create table entries
-        tables.forEach(table => {
+        // Calculate pagination
+        const totalPages = Math.ceil(filteredTables.length / tablesPerPage);
+        document.getElementById('total-pages').textContent = totalPages;
+        document.getElementById('current-page').textContent = currentPage;
+        
+        // Reset current page if it's now out of bounds
+        if (currentPage > totalPages) {
+            currentPage = 1;
+            document.getElementById('current-page').textContent = currentPage;
+        }
+        
+        // Get current page tables
+        const startIndex = (currentPage - 1) * tablesPerPage;
+        const endIndex = Math.min(startIndex + tablesPerPage, filteredTables.length);
+        const currentPageTables = filteredTables.slice(startIndex, endIndex);
+        
+        // Show/hide pagination as needed
+        if (totalPages <= 1) {
+            document.getElementById('tables-pagination').classList.add('hidden');
+        } else {
+            document.getElementById('tables-pagination').classList.remove('hidden');
+        }
+        
+        // Enable/disable pagination buttons
+        document.getElementById('prev-page-btn').disabled = currentPage <= 1;
+        document.getElementById('next-page-btn').disabled = currentPage >= totalPages;
+        
+        // Create table entries for current page only
+        currentPageTables.forEach(table => {
             try {
                 if (!table || typeof table !== 'object') {
                     console.warn("Invalid table data:", table);
@@ -610,6 +691,242 @@ document.addEventListener('DOMContentLoaded', function() {
         initTableSearch();
     }
     
+    // Modify the applyTableFilters function to support pagination
+    function applyTableFilters(shouldRender = true) {
+        const searchTerm = tableSearch.value.toLowerCase();
+        filteredTables = [];
+        
+        // Filter the tables based on active filters
+        allTables.forEach(table => {
+            if (!table) return;
+            
+            const tableName = (table.table_name || table.tableName || '').toLowerCase();
+            const schemaName = (table.schema || table.schemaName || '').toLowerCase();
+            const tableId = table.table_id || table.tableId || '';
+            const isSelected = selectedTables.has(tableId);
+            
+            // Apply schema filter
+            let matchesSchemaFilter = true;
+            if (activeSchemaFilters.size > 0) {
+                matchesSchemaFilter = activeSchemaFilters.has(table.schema || table.schemaName);
+            }
+            
+            // Apply selection filter
+            let matchesSelectionFilter = true;
+            if (document.getElementById('filterAlreadySelectedBtn').classList.contains('active')) {
+                matchesSelectionFilter = isSelected;
+            } else if (document.getElementById('filterNotSelectedBtn').classList.contains('active')) {
+                matchesSelectionFilter = !isSelected;
+            }
+            
+            // Apply search filter
+            const matchesSearch = tableName.includes(searchTerm) || 
+                                schemaName.includes(searchTerm);
+            
+            // Add to filtered tables if it matches all filters
+            if (matchesSchemaFilter && matchesSelectionFilter && matchesSearch) {
+                filteredTables.push(table);
+            }
+        });
+        
+        // Show/hide no results message
+        if (filteredTables.length === 0) {
+            noTablesMessage.classList.remove('hidden');
+            noTablesMessage.querySelector('p').textContent = 'No tables match your filters.';
+            document.getElementById('tables-pagination').classList.add('hidden');
+        } else {
+            noTablesMessage.classList.add('hidden');
+            
+            // Calculate pagination
+            const totalPages = Math.ceil(filteredTables.length / tablesPerPage);
+            
+            // Reset current page if it's out of bounds
+            if (currentPage > totalPages) {
+                currentPage = 1;
+            }
+            
+            // Update pagination info
+            document.getElementById('total-pages').textContent = totalPages;
+            document.getElementById('current-page').textContent = currentPage;
+            
+            // Show/hide pagination controls
+            if (totalPages <= 1) {
+                document.getElementById('tables-pagination').classList.add('hidden');
+            } else {
+                document.getElementById('tables-pagination').classList.remove('hidden');
+            }
+            
+            // Enable/disable pagination buttons
+            document.getElementById('prev-page-btn').disabled = currentPage <= 1;
+            document.getElementById('next-page-btn').disabled = currentPage >= totalPages;
+        }
+        
+        // Re-render the tables if requested
+        if (shouldRender) {
+            // Clear container
+            tablesContainer.innerHTML = '';
+            
+            if (filteredTables.length > 0) {
+                // Get current page tables
+                const startIndex = (currentPage - 1) * tablesPerPage;
+                const endIndex = Math.min(startIndex + tablesPerPage, filteredTables.length);
+                const currentPageTables = filteredTables.slice(startIndex, endIndex);
+                
+                // Get templates
+                const tableTemplate = document.getElementById('table-entry-template');
+                const columnTemplate = document.getElementById('column-entry-template');
+                
+                // Create table entries
+                currentPageTables.forEach(table => {
+                    // Existing table rendering code - similar to renderTables function
+                    try {
+                        if (!table || typeof table !== 'object') {
+                            console.warn("Invalid table data:", table);
+                            return;
+                        }
+                        
+                        const tableEntry = document.importNode(tableTemplate.content, true).querySelector('.table-entry');
+                        
+                        // Set table data - handle missing properties safely
+                        const tableName = table.table_name || table.tableName || 'Unknown';
+                        const schemaName = table.schema || table.schemaName || 'Unknown';
+                        const schemaId = table.schema_id || '';
+                        const tableId = table.table_id || table.tableId || '';
+                        const description = table.description || table.tableDescription || 'No description available';
+                        
+                        tableEntry.querySelector('.table-name').textContent = tableName;
+                        tableEntry.querySelector('.table-schema-badge').textContent = schemaName;
+                        tableEntry.querySelector('.table-description').textContent = description;
+                        
+                        // Set data attributes for filtering
+                        tableEntry.dataset.tableName = tableName.toLowerCase();
+                        tableEntry.dataset.schemaName = schemaName.toLowerCase();
+                        tableEntry.dataset.tableId = tableId;
+                        tableEntry.dataset.schemaId = schemaId;
+                        
+                        // Check if this table is already selected
+                        const isSelected = selectedTables.has(tableId);
+                        if (isSelected) {
+                            tableEntry.classList.add('bg-primary/10', 'border', 'border-primary');
+                            tableEntry.querySelector('.table-checkbox').checked = true;
+                        }
+                        
+                        // Add columns if available
+                        const columnsGrid = tableEntry.querySelector('.columns-grid');
+                        if (table.columns && Array.isArray(table.columns) && table.columns.length > 0) {
+                            table.columns.forEach(column => {
+                                if (!column) return;
+                                
+                                const columnEntry = document.importNode(columnTemplate.content, true).querySelector('.column-entry');
+                                
+                                // Set column data
+                                const columnName = column.column_name || column.columnName || 'Unknown';
+                                const columnType = column.column_datatype || column.columnDatatype || column.dataType || 'Unknown';
+                                const columnId = column.column_id || column.columnId || '';
+                                
+                                columnEntry.querySelector('.column-name').textContent = columnName;
+                                columnEntry.querySelector('.column-type').textContent = columnType;
+                                
+                                // Set data attributes
+                                const checkbox = columnEntry.querySelector('.column-checkbox');
+                                checkbox.dataset.columnId = columnId;
+                                checkbox.dataset.columnName = columnName;
+                                checkbox.dataset.tableId = tableId;
+                                
+                                // Check if this column is already selected
+                                if (isSelected) {
+                                    checkbox.checked = true;
+                                }
+                                
+                                columnsGrid.appendChild(columnEntry);
+                            });
+                        } else {
+                            columnsGrid.innerHTML = '<p class="col-span-2 text-center py-2">No columns information available</p>';
+                        }
+                        
+                        // Add toggle functionality for columns
+                        const toggleBtn = tableEntry.querySelector('.toggle-columns-btn');
+                        const columnsList = tableEntry.querySelector('.columns-list');
+                        
+                        toggleBtn.addEventListener('click', function() {
+                            columnsList.classList.toggle('hidden');
+                            
+                            // Toggle icon direction
+                            const svg = toggleBtn.querySelector('svg');
+                            if (columnsList.classList.contains('hidden')) {
+                                svg.innerHTML = '<polyline points="6 9 12 15 18 9"></polyline>';
+                            } else {
+                                svg.innerHTML = '<polyline points="18 15 12 9 6 15"></polyline>';
+                            }
+                        });
+                        
+                        // Add checkbox behavior for table selection
+                        const tableCheckbox = tableEntry.querySelector('.table-checkbox');
+                        tableCheckbox.addEventListener('change', function() {
+                            if (this.checked) {
+                                selectedTables.add(tableId);
+                                tableEntry.classList.add('bg-primary/10', 'border', 'border-primary');
+                                
+                                // Select all columns
+                                const columnCheckboxes = tableEntry.querySelectorAll('.column-checkbox');
+                                columnCheckboxes.forEach(checkbox => {
+                                    checkbox.checked = true;
+                                });
+                            } else {
+                                selectedTables.delete(tableId);
+                                tableEntry.classList.remove('bg-primary/10', 'border', 'border-primary');
+                                
+                                // Deselect all columns
+                                const columnCheckboxes = tableEntry.querySelectorAll('.column-checkbox');
+                                columnCheckboxes.forEach(checkbox => {
+                                    checkbox.checked = false;
+                                });
+                            }
+                            
+                            // Update hidden input fields for form submission
+                            updateFormFields();
+                        });
+                        
+                        // Add select/deselect all columns functionality
+                        const selectAllColumnsBtn = tableEntry.querySelector('.select-all-columns');
+                        const deselectAllColumnsBtn = tableEntry.querySelector('.deselect-all-columns');
+                        
+                        selectAllColumnsBtn.addEventListener('click', function() {
+                            const columnCheckboxes = tableEntry.querySelectorAll('.column-checkbox');
+                            columnCheckboxes.forEach(checkbox => {
+                                checkbox.checked = true;
+                            });
+                            
+                            // Ensure table is selected too
+                            tableCheckbox.checked = true;
+                            selectedTables.add(tableId);
+                            tableEntry.classList.add('bg-primary/10', 'border', 'border-primary');
+                            
+                            // Update hidden input fields for form submission
+                            updateFormFields();
+                        });
+                        
+                        deselectAllColumnsBtn.addEventListener('click', function() {
+                            const columnCheckboxes = tableEntry.querySelectorAll('.column-checkbox');
+                            columnCheckboxes.forEach(checkbox => {
+                                checkbox.checked = false;
+                            });
+                            
+                            // Update hidden input fields for form submission
+                            updateFormFields();
+                        });
+                        
+                        // Add to container
+                        tablesContainer.appendChild(tableEntry);
+                        
+                    } catch (e) {
+                        console.error("Error rendering table:", e, table);
+                    }
+                });
+            }
+        }
+    }
+    
     // Function to update hidden form fields based on selected tables and columns
     function updateFormFields() {
         // Clear existing hidden fields
@@ -713,6 +1030,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         this.classList.add('badge-primary');
                     }
                     
+                    // Reset to page 1 when filter changes
+                    currentPage = 1;
+                    document.getElementById('current-page').textContent = currentPage;
+                    
                     // Apply filters
                     applyTableFilters();
                 });
@@ -727,58 +1048,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Apply all active filters to the table list
-    function applyTableFilters() {
-        const searchTerm = tableSearch.value.toLowerCase();
-        const tableEntries = tablesContainer.querySelectorAll('.table-entry');
-        let visibleCount = 0;
-        
-        tableEntries.forEach(entry => {
-            const tableName = entry.dataset.tableName;
-            const schemaName = entry.dataset.schemaName;
-            const tableId = entry.dataset.tableId;
-            const isSelected = selectedTables.has(tableId);
-            
-            // Apply schema filter
-            let matchesSchemaFilter = true;
-            if (activeSchemaFilters.size > 0) {
-                matchesSchemaFilter = activeSchemaFilters.has(schemaName);
-            }
-            
-            // Apply selection filter
-            let matchesSelectionFilter = true;
-            if (document.getElementById('filterAlreadySelectedBtn').classList.contains('active')) {
-                matchesSelectionFilter = isSelected;
-            } else if (document.getElementById('filterNotSelectedBtn').classList.contains('active')) {
-                matchesSelectionFilter = !isSelected;
-            }
-            
-            // Apply search filter
-            const matchesSearch = tableName.includes(searchTerm) || 
-                                 schemaName.includes(searchTerm);
-            
-            // Show entry if it matches all filters
-            if (matchesSchemaFilter && matchesSelectionFilter && matchesSearch) {
-                entry.style.display = 'block';
-                visibleCount++;
-            } else {
-                entry.style.display = 'none';
-            }
-        });
-        
-        // Show/hide no results message
-        if (visibleCount === 0) {
-            noTablesMessage.classList.remove('hidden');
-            noTablesMessage.querySelector('p').textContent = 'No tables match your filters.';
-        } else {
-            noTablesMessage.classList.add('hidden');
-        }
-    }
-    
     // Table search functionality
     function initTableSearch() {
         if (tableSearch) {
             tableSearch.addEventListener('input', function() {
+                // Reset to page 1 when search changes
+                currentPage = 1;
+                document.getElementById('current-page').textContent = currentPage;
                 applyTableFilters();
             });
         }
@@ -834,6 +1110,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 filterNotSelectedBtn.classList.remove('active');
             }
             
+            // Reset to page 1
+            currentPage = 1;
+            document.getElementById('current-page').textContent = currentPage;
+            
             // Apply filters
             applyTableFilters();
         });
@@ -847,6 +1127,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Deactivate the "already selected" filter
                 filterAlreadySelectedBtn.classList.remove('active');
             }
+            
+            // Reset to page 1
+            currentPage = 1;
+            document.getElementById('current-page').textContent = currentPage;
             
             // Apply filters
             applyTableFilters();
@@ -866,7 +1150,42 @@ document.addEventListener('DOMContentLoaded', function() {
             filterAlreadySelectedBtn.classList.remove('active');
             filterNotSelectedBtn.classList.remove('active');
             
+            // Reset to page 1
+            currentPage = 1;
+            document.getElementById('current-page').textContent = currentPage;
+            
             // Reset display
+            applyTableFilters();
+        });
+    }
+    
+    // Pagination controls event handlers
+    if (prevPageBtn) {
+        prevPageBtn.addEventListener('click', function() {
+            if (currentPage > 1) {
+                currentPage--;
+                document.getElementById('current-page').textContent = currentPage;
+                applyTableFilters();
+            }
+        });
+    }
+    
+    if (nextPageBtn) {
+        nextPageBtn.addEventListener('click', function() {
+            const totalPages = Math.ceil(filteredTables.length / tablesPerPage);
+            if (currentPage < totalPages) {
+                currentPage++;
+                document.getElementById('current-page').textContent = currentPage;
+                applyTableFilters();
+            }
+        });
+    }
+    
+    if (pageSizeSelector) {
+        pageSizeSelector.addEventListener('change', function() {
+            tablesPerPage = parseInt(this.value);
+            currentPage = 1;
+            document.getElementById('current-page').textContent = currentPage;
             applyTableFilters();
         });
     }
@@ -899,7 +1218,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Collect all selected tables and columns
             const selectedTables = [];
-            const tableEntries = tablesContainer.querySelectorAll('.table-entry');
+            const tableEntries = document.querySelectorAll('.table-entry');
             
             tableEntries.forEach(entry => {
                 const tableCheckbox = entry.querySelector('.table-checkbox');
