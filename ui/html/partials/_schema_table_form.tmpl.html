@@ -11,37 +11,91 @@
         <!-- Schema Selection Section -->
         <div class="card bg-base-100 shadow-lg w-full">
             <div class="card-body">
-                <h2 class="card-title text-lg font-medium mb-4">1. Select Schema(s)</h2>
-                <p class="text-base-content/70 mb-4">Choose one or more schemas from your connected database to use in your project.</p>
+                <h2 class="card-title text-lg font-medium mb-4">1. Add Schemas to Metadata</h2>
+                <p class="text-base-content/70 mb-4">Choose schemas from your connected database to add to the metadata table.</p>
+
+                <!-- Form for adding schemas to metadata -->
+                <form id="addSchemaForm" action="/schema/create" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <input type="hidden" name="project_id" value="{{.Project.ID}}">
+                    <input type="hidden" name="db_id" value="{{.ProjectDatabase.ID}}">
+                    
+                    <div class="flex flex-col gap-4">
+                        <!-- Schema Selection -->
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text font-medium">Available Database Schemas</span>
+                                <span class="label-text-alt">Hold Ctrl/Cmd to select multiple schemas</span>
+                            </label>
+                            
+                            {{if .SchemaList}}
+                                <div class="border rounded-lg bg-base-200 p-2">
+                                    <select id="schemaName" name="schemaName" class="select select-bordered w-full h-40" size="5" multiple>
+                                        {{range .SchemaList}}
+                                            <option value="{{.}}">{{.}}</option>
+                                        {{end}}
+                                    </select>
+                                </div>
+                            {{else}}
+                                <div class="alert alert-error mb-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <span>No schemas found in the connected database. Please check your database connection or connect to a different database.</span>
+                                </div>
+                            {{end}}
+                        </div>
+
+                        <!-- Submit Button -->
+                        {{if .SchemaList}}
+                        <button type="submit" class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                <polyline points="7 3 7 8 15 8"></polyline>
+                            </svg>
+                            Add Schemas to Metadata
+                        </button>
+                        {{end}}
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Metadata Schemas Section -->
+        <div class="card bg-base-100 shadow-lg w-full">
+            <div class="card-body">
+                <h2 class="card-title text-lg font-medium mb-4">2. Select Schema(s) from Metadata</h2>
+                <p class="text-base-content/70 mb-4">Choose from schemas already stored in the metadata table to load their tables.</p>
 
                 <div class="flex flex-col gap-4">
-                    <!-- Schema Selection -->
+                    <!-- Metadata Schema Selection -->
                     <div class="form-control">
                         <label class="label">
-                            <span class="label-text font-medium">Available Schemas in Database</span>
+                            <span class="label-text font-medium">Available Schemas in Metadata</span>
                             <span class="label-text-alt">Hold Ctrl/Cmd to select multiple schemas</span>
                         </label>
                         
-                        {{if .SchemaList}}
+                        {{if .RegisteredSchemas}}
                             <div class="border rounded-lg bg-base-200 p-2">
-                                <select id="schemaName" class="select select-bordered w-full h-40" size="5" multiple>
-                                    {{range .SchemaList}}
-                                        <option value="{{.}}">{{.}}</option>
+                                <select id="metadataSchemaName" class="select select-bordered w-full h-40" size="5" multiple>
+                                    {{range .RegisteredSchemas}}
+                                        <option value="{{.ID}}">{{.Name}}</option>
                                     {{end}}
                                 </select>
                             </div>
                         {{else}}
-                            <div class="alert alert-error mb-4">
+                            <div class="alert alert-warning mb-4">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                 </svg>
-                                <span>No schemas found in the connected database. Please check your database connection or connect to a different database.</span>
+                                <span>No schemas found in metadata. Please add schemas in step 1 first.</span>
                             </div>
                         {{end}}
                     </div>
 
                     <!-- Load Tables Button -->
-                    {{if .SchemaList}}
+                    {{if .RegisteredSchemas}}
                     <button type="button" id="loadTablesBtn" class="btn btn-primary">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M8 6h13"></path>
@@ -59,9 +113,9 @@
         </div>
 
         <!-- Tables Selection Section -->
-        <div id="tablesSection" class="card bg-base-100 shadow-lg w-full {{if not .ProjectSchemas}}hidden{{end}}">
+        <div id="tablesSection" class="card bg-base-100 shadow-lg w-full {{if not .RegisteredSchemas}}hidden{{end}}">
             <div class="card-body">
-                <h2 class="card-title text-lg font-medium mb-4">2. Select Tables and Columns</h2>
+                <h2 class="card-title text-lg font-medium mb-4">3. Select Tables and Columns</h2>
                 <p class="text-base-content/70 mb-4">Choose which tables and columns you want to make available to your AI assistant.</p>
 
                 <!-- Loading indicator -->
@@ -73,70 +127,77 @@
                 <!-- Error message area -->
                 <div id="tablesError" class="alert alert-error mb-4 hidden"></div>
 
-                <!-- Tables Container Header -->
-                <div class="flex flex-col space-y-4">
-                    <!-- Search and Controls -->
-                    <div class="flex flex-col md:flex-row gap-4 items-center">
-                        <div class="form-control flex-grow">
-                            <div class="join w-full">
-                                <div class="join-item flex items-center bg-base-200 px-3">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <circle cx="11" cy="11" r="8"></circle>
-                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                                    </svg>
+                <!-- Form for submitting selected tables and columns -->
+                <form id="tablesForm" action="/schema/add/tables" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <input type="hidden" name="project_id" value="{{.Project.ID}}">
+                    <div id="selectedTablesData"></div>
+
+                    <!-- Tables Container Header -->
+                    <div class="flex flex-col space-y-4">
+                        <!-- Search and Controls -->
+                        <div class="flex flex-col md:flex-row gap-4 items-center">
+                            <div class="form-control flex-grow">
+                                <div class="join w-full">
+                                    <div class="join-item flex items-center bg-base-200 px-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <circle cx="11" cy="11" r="8"></circle>
+                                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                        </svg>
+                                    </div>
+                                    <input type="text" placeholder="Search tables..." id="table-search" class="join-item input input-bordered w-full"/>
                                 </div>
-                                <input type="text" placeholder="Search tables..." id="table-search" class="join-item input input-bordered w-full"/>
                             </div>
+                            
+                            <div class="flex gap-2 items-center">
+                                <button type="button" id="selectAllTables" class="btn btn-sm btn-outline">Select All</button>
+                                <button type="button" id="deselectAllTables" class="btn btn-sm btn-outline">Deselect All</button>
+                                <div class="dropdown dropdown-bottom dropdown-end">
+                                    <label tabindex="0" class="btn btn-sm btn-outline">Filter</label>
+                                    <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                                        <li><a id="filterBySchemaBtn">By Schema</a></li>
+                                        <li><a id="filterAlreadySelectedBtn">Already Selected</a></li>
+                                        <li><a id="filterNotSelectedBtn">Not Selected</a></li>
+                                        <li><a id="resetFiltersBtn">Reset Filters</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Schema filter chips -->
+                        <div id="schema-filter-chips" class="flex flex-wrap gap-2 hidden">
+                            <!-- Will be populated by JS -->
+                        </div>
+
+                        <!-- Tables list -->
+                        <div class="divider my-2"></div>
+                        
+                        <!-- Empty state -->
+                        <div id="no-tables-message" class="py-8 text-center hidden">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-4 opacity-50">
+                                <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 1 3-3H3a3 3 0 0 1 3-3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 1-3 3h21a3 3 0 0 1-3 3 3 3 0 0 0-3 3V6a3 3 0 0 0-3-3z"></path>
+                            </svg>
+                            <p class="text-base-content/70">No tables found. Please select at least one schema first.</p>
                         </div>
                         
-                        <div class="flex gap-2 items-center">
-                            <button id="selectAllTables" class="btn btn-sm btn-outline">Select All</button>
-                            <button id="deselectAllTables" class="btn btn-sm btn-outline">Deselect All</button>
-                            <div class="dropdown dropdown-bottom dropdown-end">
-                                <label tabindex="0" class="btn btn-sm btn-outline">Filter</label>
-                                <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
-                                    <li><a id="filterBySchemaBtn">By Schema</a></li>
-                                    <li><a id="filterAlreadySelectedBtn">Already Selected</a></li>
-                                    <li><a id="filterNotSelectedBtn">Not Selected</a></li>
-                                    <li><a id="resetFiltersBtn">Reset Filters</a></li>
-                                </ul>
-                            </div>
+                        <!-- Table cards container -->
+                        <div class="space-y-4" id="tables-container">
+                            <!-- Will be populated by JavaScript -->
                         </div>
                     </div>
 
-                    <!-- Schema filter chips -->
-                    <div id="schema-filter-chips" class="flex flex-wrap gap-2 hidden">
-                        <!-- Will be populated by JS -->
+                    <!-- Submit Button for selected tables -->
+                    <div id="tableSubmitSection" class="mt-6 {{if not .RegisteredSchemas}}hidden{{end}}">
+                        <button type="submit" id="updateDataSource" class="btn btn-primary btn-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                <polyline points="7 3 7 8 15 8"></polyline>
+                            </svg>
+                            Save Selected Tables
+                        </button>
                     </div>
-
-                    <!-- Tables list -->
-                    <div class="divider my-2"></div>
-                    
-                    <!-- Empty state -->
-                    <div id="no-tables-message" class="py-8 text-center hidden">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-4 opacity-50">
-                            <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 1 3-3H3a3 3 0 0 1 3-3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 1-3 3h21a3 3 0 0 1-3 3 3 3 0 0 0-3 3V6a3 3 0 0 0-3-3z"></path>
-                        </svg>
-                        <p class="text-base-content/70">No tables found. Please select at least one schema first.</p>
-                    </div>
-                    
-                    <!-- Table cards container -->
-                    <div class="space-y-4" id="tables-container">
-                        <!-- Will be populated by JavaScript -->
-                    </div>
-                </div>
-
-                <!-- Submit Button for selected tables -->
-                <div id="tableSubmitSection" class="mt-6 {{if not .ProjectSchemas}}hidden{{end}}">
-                    <button type="button" id="updateDataSource" class="btn btn-primary btn-lg">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                            <polyline points="7 3 7 8 15 8"></polyline>
-                        </svg>
-                        Save Selected Tables
-                    </button>
-                </div>
+                </form>
             </div>
         </div>
     {{else}}
@@ -170,7 +231,7 @@
                         </div>
                     </div>
                 </div>
-                <button class="btn btn-sm btn-circle toggle-columns-btn">
+                <button type="button" class="btn btn-sm btn-circle toggle-columns-btn">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" 
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="6 9 12 15 18 9"></polyline>
@@ -182,8 +243,8 @@
                 <div class="flex justify-between items-center mb-2">
                     <span class="text-sm font-medium">Columns</span>
                     <div class="space-x-2">
-                        <button class="select-all-columns btn btn-xs btn-outline">Select All</button>
-                        <button class="deselect-all-columns btn btn-xs btn-outline">Deselect All</button>
+                        <button type="button" class="select-all-columns btn btn-xs btn-outline">Select All</button>
+                        <button type="button" class="deselect-all-columns btn btn-xs btn-outline">Deselect All</button>
                     </div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 columns-grid">
@@ -224,6 +285,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const tableSubmitSection = document.getElementById('tableSubmitSection');
     const noTablesMessage = document.getElementById('no-tables-message');
     const schemaFilterChips = document.getElementById('schema-filter-chips');
+    const tablesForm = document.getElementById('tablesForm');
+    const selectedTablesData = document.getElementById('selectedTablesData');
     
     // Selection controls
     const selectAllTablesBtn = document.getElementById('selectAllTables');
@@ -242,6 +305,23 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial state - only show schema selection initially
     tablesSection.classList.add('hidden');
     
+    // Add Schema Form Submission
+    const addSchemaForm = document.getElementById('addSchemaForm');
+    if (addSchemaForm) {
+        addSchemaForm.addEventListener('submit', function(e) {
+            const schemaSelect = document.getElementById('schemaName');
+            const selectedSchemas = Array.from(schemaSelect.selectedOptions).map(option => option.value);
+            
+            if (selectedSchemas.length === 0) {
+                e.preventDefault();
+                alert('Please select at least one schema');
+                return false;
+            }
+            
+            // Form will submit normally to /schema/create and refresh the page
+        });
+    }
+    
     // Load tables button handler
     const loadTablesBtn = document.getElementById('loadTablesBtn');
     if (loadTablesBtn) {
@@ -252,21 +332,18 @@ document.addEventListener('DOMContentLoaded', function() {
             tablesError.classList.add('hidden');
             tablesContainer.innerHTML = '';
             
-            // Get selected schemas
-            const schemaSelect = document.getElementById('schemaName');
+            // Get selected schemas from metadata dropdown
+            const schemaSelect = document.getElementById('metadataSchemaName');
             const selectedSchemas = Array.from(schemaSelect.selectedOptions).map(option => option.value);
             
             if (selectedSchemas.length === 0) {
-                tablesError.textContent = 'Please select at least one schema';
+                tablesError.textContent = 'Please select at least one schema from metadata';
                 tablesError.classList.remove('hidden');
                 tablesLoading.classList.add('hidden');
                 return;
             }
             
-            // Get CSRF token
-            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-            
-            // Load tables directly without creating schemas
+            // Load tables for the selected metadata schemas
             loadTablesForSchemas(selectedSchemas);
         });
     }
@@ -294,13 +371,10 @@ document.addEventListener('DOMContentLoaded', function() {
             availableSchemas.clear();
             
             // Fetch tables for each selected schema
-            for (const schemaName of selectedSchemas) {
+            for (const schemaId of selectedSchemas) {
                 try {
-                    // Add schema to available list
-                    availableSchemas.add(schemaName);
-                    
                     // Fetch tables for this schema
-                    const response = await fetch(`/api/schema/${schemaName}/tables?project_id=${projectId}`, {
+                    const response = await fetch(`/api/schema/${schemaId}/tables?project_id=${projectId}`, {
                         method: 'GET',
                         headers: {
                             'X-CSRF-Token': csrfToken,
@@ -309,7 +383,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                     
                     if (!response.ok) {
-                        console.warn(`Error fetching tables for schema ${schemaName}: ${response.status}`);
+                        console.warn(`Error fetching tables for schema ID ${schemaId}: ${response.status}`);
                         continue; // Continue with other schemas
                     }
                     
@@ -318,17 +392,25 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Process tables
                     const tables = Array.isArray(tableData) ? tableData : tableData.tables || [];
                     
+                    // Get schema name for display (from the select option text)
+                    const schemaOption = document.querySelector(`#metadataSchemaName option[value="${schemaId}"]`);
+                    const schemaName = schemaOption ? schemaOption.textContent : schemaId;
+                    
+                    // Add schema name to available list
+                    availableSchemas.add(schemaName);
+                    
                     // Add schema name to each table
                     const tablesWithSchema = tables.map(table => ({
                         ...table,
-                        schema: schemaName
+                        schema: schemaName,
+                        schema_id: schemaId
                     }));
                     
                     // Add to our collection
                     allTables = [...allTables, ...tablesWithSchema];
                     
                 } catch (err) {
-                    console.error(`Error processing schema ${schemaName}:`, err);
+                    console.error(`Error processing schema ${schemaId}:`, err);
                     // Continue with other schemas
                 }
             }
@@ -357,6 +439,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Clear container
         tablesContainer.innerHTML = '';
+        selectedTablesData.innerHTML = ''; // Clear any previous hidden fields
         
         if (!tables || tables.length === 0) {
             noTablesMessage.classList.remove('hidden');
@@ -389,6 +472,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Set table data - handle missing properties safely
                 const tableName = table.table_name || table.tableName || 'Unknown';
                 const schemaName = table.schema || table.schemaName || 'Unknown';
+                const schemaId = table.schema_id || '';
                 const tableId = table.table_id || table.tableId || '';
                 const description = table.description || table.tableDescription || 'No description available';
                 
@@ -400,6 +484,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 tableEntry.dataset.tableName = tableName.toLowerCase();
                 tableEntry.dataset.schemaName = schemaName.toLowerCase();
                 tableEntry.dataset.tableId = tableId;
+                tableEntry.dataset.schemaId = schemaId;
                 
                 // Check if this table is already selected
                 const isSelected = selectedTables.has(tableId);
@@ -428,6 +513,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         const checkbox = columnEntry.querySelector('.column-checkbox');
                         checkbox.dataset.columnId = columnId;
                         checkbox.dataset.columnName = columnName;
+                        checkbox.dataset.tableId = tableId;
                         
                         // Check if this column is already selected
                         if (isSelected) {
@@ -478,6 +564,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             checkbox.checked = false;
                         });
                     }
+                    
+                    // Update hidden input fields for form submission
+                    updateFormFields();
                 });
                 
                 // Add select/deselect all columns functionality
@@ -494,6 +583,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     tableCheckbox.checked = true;
                     selectedTables.add(tableId);
                     tableEntry.classList.add('bg-primary/10', 'border', 'border-primary');
+                    
+                    // Update hidden input fields for form submission
+                    updateFormFields();
                 });
                 
                 deselectAllColumnsBtn.addEventListener('click', function() {
@@ -501,6 +593,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     columnCheckboxes.forEach(checkbox => {
                         checkbox.checked = false;
                     });
+                    
+                    // Update hidden input fields for form submission
+                    updateFormFields();
                 });
                 
                 // Add to container
@@ -513,6 +608,74 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Initialize search
         initTableSearch();
+    }
+    
+    // Function to update hidden form fields based on selected tables and columns
+    function updateFormFields() {
+        // Clear existing hidden fields
+        selectedTablesData.innerHTML = '';
+        
+        // Get all selected tables
+        const tableEntries = tablesContainer.querySelectorAll('.table-entry');
+        let tableCount = 0;
+        
+        tableEntries.forEach(entry => {
+            const tableCheckbox = entry.querySelector('.table-checkbox');
+            
+            if (tableCheckbox.checked) {
+                const tableId = entry.dataset.tableId;
+                const schemaName = entry.querySelector('.table-schema-badge').textContent;
+                const tableName = entry.querySelector('.table-name').textContent;
+                const schemaId = entry.dataset.schemaId;
+                
+                // Create hidden field for this table
+                const tableIdField = document.createElement('input');
+                tableIdField.type = 'hidden';
+                tableIdField.name = `tables[${tableCount}][table_id]`;
+                tableIdField.value = tableId;
+                selectedTablesData.appendChild(tableIdField);
+                
+                const schemaNameField = document.createElement('input');
+                schemaNameField.type = 'hidden';
+                schemaNameField.name = `tables[${tableCount}][schema_name]`;
+                schemaNameField.value = schemaName;
+                selectedTablesData.appendChild(schemaNameField);
+                
+                const tableNameField = document.createElement('input');
+                tableNameField.type = 'hidden';
+                tableNameField.name = `tables[${tableCount}][table_name]`;
+                tableNameField.value = tableName;
+                selectedTablesData.appendChild(tableNameField);
+                
+                const schemaIdField = document.createElement('input');
+                schemaIdField.type = 'hidden';
+                schemaIdField.name = `tables[${tableCount}][schema_id]`;
+                schemaIdField.value = schemaId;
+                selectedTablesData.appendChild(schemaIdField);
+                
+                // Get selected columns
+                const columnCheckboxes = entry.querySelectorAll('.column-checkbox:checked');
+                let columnCount = 0;
+                
+                columnCheckboxes.forEach(checkbox => {
+                    const columnIdField = document.createElement('input');
+                    columnIdField.type = 'hidden';
+                    columnIdField.name = `tables[${tableCount}][columns][${columnCount}][column_id]`;
+                    columnIdField.value = checkbox.dataset.columnId;
+                    selectedTablesData.appendChild(columnIdField);
+                    
+                    const columnNameField = document.createElement('input');
+                    columnNameField.type = 'hidden';
+                    columnNameField.name = `tables[${tableCount}][columns][${columnCount}][column_name]`;
+                    columnNameField.value = checkbox.dataset.columnName;
+                    selectedTablesData.appendChild(columnNameField);
+                    
+                    columnCount++;
+                });
+                
+                tableCount++;
+            }
+        });
     }
     
     // Update schema filter chips
@@ -708,10 +871,32 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Handle submit button for selected tables
-    const updateDataSourceBtn = document.getElementById('updateDataSource');
-    if (updateDataSourceBtn) {
-        updateDataSourceBtn.addEventListener('click', function() {
+    // Handle form submission - convert form data to JSON
+    if (tablesForm) {
+        tablesForm.addEventListener('submit', function(e) {
+            e.preventDefault(); // Stop normal form submission
+            
+            // Update form fields one final time
+            updateFormFields();
+            
+            // Check if any tables are selected
+            const tableInputs = selectedTablesData.querySelectorAll('input[name$="[table_id]"]');
+            if (tableInputs.length === 0) {
+                tablesError.textContent = 'Please select at least one table and column';
+                tablesError.classList.remove('hidden');
+                tablesError.scrollIntoView({ behavior: 'smooth' });
+                return false;
+            }
+            
+            // Get project ID and CSRF token
+            const projectId = document.querySelector('input[name="project_id"]').value;
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            
+            // Show loading indicator
+            const submitBtn = document.getElementById('updateDataSource');
+            submitBtn.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Saving...';
+            submitBtn.disabled = true;
+            
             // Collect all selected tables and columns
             const selectedTables = [];
             const tableEntries = tablesContainer.querySelectorAll('.table-entry');
@@ -721,7 +906,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (tableCheckbox.checked) {
                     const tableId = entry.dataset.tableId;
-                    const schemaName = entry.dataset.schemaName;
+                    const schemaName = entry.querySelector('.table-schema-badge').textContent;
                     const tableName = entry.querySelector('.table-name').textContent;
                     
                     // Get selected columns
@@ -747,32 +932,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
             
-            if (selectedTables.length === 0) {
-                // Show error message
-                tablesError.textContent = 'Please select at least one table and column';
-                tablesError.classList.remove('hidden');
-                
-                // Scroll to error message
-                tablesError.scrollIntoView({ behavior: 'smooth' });
-                return;
-            }
-            
-            // Submit selection to backend
-            const projectId = document.querySelector('input[name="project_id"]').value;
-            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-            
-            // Show loading indicator
-            this.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Saving...';
-            this.disabled = true;
-            
-            fetch('/api/project/tables', {
+            // Use fetch with JSON data instead of form submission
+            fetch(`/api/projects/${projectId}/selected-tables`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': csrfToken
                 },
                 body: JSON.stringify({
-                    project_id: projectId,
+                    project_id: String(projectId),
                     tables: selectedTables
                 })
             })
@@ -808,8 +976,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }, 5000);
                 
                 // Reset button
-                this.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Save Selected Tables';
-                this.disabled = false;
+                submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Save Selected Tables';
+                submitBtn.disabled = false;
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -822,8 +990,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 tablesError.scrollIntoView({ behavior: 'smooth' });
                 
                 // Reset button
-                this.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Save Selected Tables';
-                this.disabled = false;
+                submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Save Selected Tables';
+                submitBtn.disabled = false;
             });
         });
     }

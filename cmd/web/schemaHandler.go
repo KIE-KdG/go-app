@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"kdg/be/lab/internal/validator"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -31,14 +32,100 @@ type TableInfo struct {
 	Columns          []TableColumn `json:"columns"`
 }
 
-// getSchemaTablesAPI fetches tables for a specific schema from external API
-func (app *application) getSchemaTablesAPI(w http.ResponseWriter, r *http.Request) {
+type schemaCreate struct {
+	DbID                string   `form:"db_id"`
+	ProjectID           string   `form:"project_id"`
+	SchemaName          []string `form:"schemaName"`
+	validator.Validator `form:"-"`
+}
+
+// Schema registration endpoint (saves schema to metadata)
+func (app *application) databaseSchemaPost(w http.ResponseWriter, r *http.Request) {
+	var schemaForm schemaCreate
+	err := app.decodePostForm(r, &schemaForm)
+	if err != nil {
+		app.errorLog.Printf("Form decode error: %v", err)
+		app.clientError(w, http.StatusBadRequest)
+		return
+	}
+
+	schemaForm.CheckField(len(schemaForm.SchemaName) > 0, "schemaName", "Please select at least one schema")
+
+	projectID, err := uuid.Parse(schemaForm.ProjectID)
+	if err != nil {
+		app.errorLog.Printf("Invalid project ID: %v", err)
+		schemaForm.AddNonFieldError("Invalid project ID")
+		
+		// Create proper form structure
+		formData := projectForms{
+			SchemaForm: schemaSetupForm{
+				Name: schemaForm.SchemaName,
+				Validator: schemaForm.Validator,
+			},
+		}
+		
+		app.renderFormWithErrors(w, r, projectID, formData)
+		return
+	}
+
+	// Parse database ID
+	dbID, err := uuid.Parse(schemaForm.DbID)
+	if err != nil {
+		app.errorLog.Printf("Invalid database ID: %v", err)
+		schemaForm.AddNonFieldError("Invalid database ID")
+		
+		// Create proper form structure
+		formData := projectForms{
+			SchemaForm: schemaSetupForm{
+				Name: schemaForm.SchemaName,
+				Validator: schemaForm.Validator,
+			},
+		}
+		
+		app.renderFormWithErrors(w, r, projectID, formData)
+		return
+	}
+
+	if !schemaForm.Valid() {
+		// Create proper form structure
+		formData := projectForms{
+			SchemaForm: schemaSetupForm{
+				Name: schemaForm.SchemaName,
+				Validator: schemaForm.Validator,
+			},
+		}
+		
+		app.renderFormWithErrors(w, r, projectID, formData)
+		return
+	}
+
+	// Now call the API with both the database ID and schema name
+	_, err = app.externalAPI.CreateDatabaseSchema(dbID, schemaForm.SchemaName)
+	if err != nil {
+		app.errorLog.Printf("Database schema creation error: %v", err)
+		app.serverError(w, err)
+		return
+	}
+
+	app.sessionManager.Put(r.Context(), "flash", "Schema successfully registered in metadata")
+	http.Redirect(w, r, fmt.Sprintf("/project/view/%s", projectID), http.StatusSeeOther)
+}
+
+// API endpoint to get tables for a specific schema ID
+func (app *application) getSchemaTablesHandler(w http.ResponseWriter, r *http.Request) {
 	// Get schema ID from URL
 	params := httprouter.ParamsFromContext(r.Context())
-	schemaName := params.ByName("schema_name")
+	schemaIDStr := params.ByName("id")
 
 	// Validate input
-	if schemaName == "" {
+	if schemaIDStr == "" {
+		app.clientError(w, http.StatusBadRequest)
+		return
+	}
+
+	// Parse UUID
+	schemaID, err := uuid.Parse(schemaIDStr)
+	if err != nil {
 		app.clientError(w, http.StatusBadRequest)
 		return
 	}
@@ -50,79 +137,19 @@ func (app *application) getSchemaTablesAPI(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Get the project database
-	projectIDStr := r.URL.Query().Get("project_id")
-	projectID, err := uuid.Parse(projectIDStr)
-	if err != nil {
-		app.clientError(w, http.StatusBadRequest)
-		return
-	}
-
-	// Find the project database
-	projectDatabase, err := app.projectDatabase.GetByProjectID(projectID)
-	if err != nil {
-		app.serverError(w, err)
-		return
-	}
-
-	// We need to get the tables from the schema. First, need to check if this schema exists
-	// in the database at all. We shouldn't create schemas that don't exist.
-	
-	// Get all available schemas in the database
-	availableSchemas, err := app.externalAPI.GetDatabaseSchemas(projectDatabase.ID)
-	if err != nil {
-		app.serverError(w, fmt.Errorf("failed to retrieve schemas: %w", err))
-		return
-	}
-	
-	// Check if the requested schema exists in the available schemas
-	schemaExists := false
-	for _, schema := range *availableSchemas {
-		if schema == schemaName {
-			schemaExists = true
-			break
-		}
-	}
-	
-	if !schemaExists {
-		app.clientError(w, http.StatusNotFound)
-		return
-	}
-	
-	// Now we know the schema exists in the database, so we can try to get tables
-	var schemaID uuid.UUID
-	
-	// If we have the schema in our system already, get its ID
-	schemaID, err = app.schemas.GetSchemaIDByName(schemaName, projectDatabase.ID)
-	if err != nil {
-		// If schema reference doesn't exist in our system yet, we need its ID from the external API
-		// This is just to get a reference to the schema, not to create it
-		// We're using an existing schema from the database
-		schemaResponse, err := app.externalAPI.CreateDatabaseSchema(projectDatabase.ID, []string{schemaName})
-		if err != nil {
-			app.serverError(w, fmt.Errorf("failed to reference schema: %w", err))
-			return
-		}
-		
-		schemaID = schemaResponse.SchemaID
-	}
-
-	// Use the external API client to get tables for the schema
+	// Call the external API to get tables for this schema
 	tables, err := app.externalAPI.GetSchemaTables(schemaID)
 	if err != nil {
 		app.serverError(w, fmt.Errorf("error fetching tables: %w", err))
 		return
 	}
 
-	// Return JSON response
+	// Return tables as JSON
 	w.Header().Set(contentTypeHeader, applicationJSON)
-	err = json.NewEncoder(w).Encode(tables)
-	if err != nil {
-		app.serverError(w, err)
-	}
+	json.NewEncoder(w).Encode(tables)
 }
 
-// saveProjectTables handles saving the selected tables and columns for a project
+// API endpoint to save selected tables and columns
 func (app *application) saveProjectTables(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from session
 	userID := app.userIdFromSession(r)

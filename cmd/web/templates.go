@@ -11,23 +11,24 @@ import (
 )
 
 type templateData struct {
-	Completion      string
-	CurrentYear     int
-	Chats           []*models.Chat
-	Messages        []*models.Message
-	GeoData         string
-	Form            any
-	Flash           string
-	IsAuthenticated bool
-	CSRFToken       string
-	Localizer       *i18n.Localizer
-	Projects        []*models.Project
-	Project         *models.Project
-	ProjectDatabase *models.ProjectDatabase
-	ProjectSchemas  []string
-	SchemaList      []string
-	Files           []*models.File
-	HasDocuments    bool
+	Completion        string
+	CurrentYear       int
+	Chats             []*models.Chat
+	Messages          []*models.Message
+	GeoData           string
+	Form              any
+	Flash             string
+	IsAuthenticated   bool
+	CSRFToken         string
+	Localizer         *i18n.Localizer
+	Projects          []*models.Project
+	Project           *models.Project
+	ProjectDatabase   *models.ProjectDatabase
+	ProjectSchemas    []string
+	SchemaList        []string
+	RegisteredSchemas []RegisteredSchema
+	Files             []*models.File
+	HasDocuments      bool
 }
 
 func humanDate(t time.Time) string {

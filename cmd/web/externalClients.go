@@ -205,8 +205,6 @@ func (c *ExternalAPIClient) GetDatabaseSchemas(dbID uuid.UUID) (*[]string, error
 		return nil, err
 	}
 
-	fmt.Printf("schemas found for DB: %s, %s", dbID, response)
-
 	return &response, nil
 }
 
