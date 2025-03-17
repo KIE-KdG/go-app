@@ -33,20 +33,12 @@ type TableInfo struct {
 
 // getSchemaTablesAPI fetches tables for a specific schema from external API
 func (app *application) getSchemaTablesAPI(w http.ResponseWriter, r *http.Request) {
-	// Get schema ID from URL
+	// Get schema name from URL
 	params := httprouter.ParamsFromContext(r.Context())
-	schemaIDStr := params.ByName("schema_id")
+	schemaName := params.ByName("schema_name")
 
 	// Validate input
-	if schemaIDStr == "" {
-		app.clientError(w, http.StatusBadRequest)
-		return
-	}
-
-	// Parse schema ID
-	schemaID, err := uuid.Parse(schemaIDStr)
-	if err != nil {
-		app.errorLog.Printf("Invalid schema ID: %v", err)
+	if schemaName == "" {
 		app.clientError(w, http.StatusBadRequest)
 		return
 	}
@@ -58,32 +50,42 @@ func (app *application) getSchemaTablesAPI(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Create API request to the external service
-	apiURL := fmt.Sprintf("%s/api/schemas/%s/tables-detailed", 
-		app.externalAPI.baseURL, 
-		schemaID.String())
-
-	// Create API request
-	apiReq := APIRequest{
-		Method: http.MethodGet,
-		URL:    apiURL,
-		Headers: map[string]string{
-			contentTypeHeader: applicationJSON,
-		},
+	// Get the project database
+	projectIDStr := r.URL.Query().Get("project_id")
+	projectID, err := uuid.Parse(projectIDStr)
+	if err != nil {
+		app.errorLog.Printf("Invalid project ID: %v", err)
+		app.clientError(w, http.StatusBadRequest)
+		return
 	}
 
-	// Handle the API response
-	var tablesResponse []TableInfo
-	err = app.externalAPI.sendAPIRequest(apiReq, &tablesResponse)
+	// Find the project database
+	projectDatabase, err := app.projectDatabase.GetByProjectID(projectID)
 	if err != nil {
-		app.errorLog.Printf("Error fetching tables for schema %s: %v", schemaID, err)
+		app.errorLog.Printf("Failed to get project database: %v", err)
+		app.serverError(w, err)
+		return
+	}
+
+	// Fetch schema ID using the schema name and database ID
+	schemaID, err := app.schemas.GetSchemaIDByName(schemaName, projectDatabase.ID)
+	if err != nil {
+		app.errorLog.Printf("Failed to get schema ID for schema %s: %v", schemaName, err)
+		app.serverError(w, err)
+		return
+	}
+
+	// Use the external API client to get tables for the schema
+	tables, err := app.externalAPI.GetSchemaTables(schemaID)
+	if err != nil {
+		app.errorLog.Printf("Error fetching tables for schema %s: %v", schemaName, err)
 		app.serverError(w, fmt.Errorf("error fetching tables: %w", err))
 		return
 	}
 
 	// Return JSON response
 	w.Header().Set(contentTypeHeader, applicationJSON)
-	err = json.NewEncoder(w).Encode(tablesResponse)
+	err = json.NewEncoder(w).Encode(tables)
 	if err != nil {
 		app.serverError(w, err)
 	}

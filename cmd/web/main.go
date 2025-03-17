@@ -33,6 +33,7 @@ type application struct {
 	messages        *models.MessageModel
 	projects        *models.ProjectModel
 	projectDatabase *models.ProjectDatabaseModel
+	schemas         *models.SchemaModel
 	files           *models.FileModel
 	templateCache   map[string]*template.Template
 	formDecoder     *form.Decoder
@@ -111,6 +112,7 @@ func main() {
 		messages:        models.NewMessageModel(postgres),
 		projects:        models.NewProjectModel(postgres),
 		projectDatabase: models.NewProjectDatabaseModel(postgres),
+		schemas:         models.NewSchemaModel(postgres),
 		files:           models.NewFileModel(postgres),
 		templateCache:   templateCache,
 		formDecoder:     formDecoder,
