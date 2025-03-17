@@ -2,110 +2,193 @@
 <div class="flex flex-col space-y-8 w-full">
     <!-- Header/Title Section -->
     <div class="w-full">
-        <legend class="text-2xl font-bold text-base-content">Database Search Configuration</legend>
+        <h2 class="text-2xl font-bold text-base-content mb-2">Database Search Configuration</h2>
+        <p class="text-base-content/70">Configure which database schemas and tables will be available for your AI assistant</p>
     </div>
 
-    <!-- Schema Selection Section -->
-    <div class="card bg-base-100 shadow-lg w-full">
-        <div class="card-body">
-            <h2 class="card-title text-lg font-medium mb-4">1. Select Schema(s)</h2>
-
-            {{if .ProjectSchemas}}
-
-            <form id="schemaForm" action="/schema/create" method="POST" novalidate>
-                <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
-                <input type='hidden' name='db_id' value='{{.ProjectDatabase.ID}}'>
-                <input type='hidden' name='project_id' value='{{.Project.ID}}'>
-
-                {{with .Form.DatabaseForm}}
-                {{range .NonFieldErrors}}
-                <div class='alert alert-error mb-4'>{{.}}</div>
-                {{end}}
-                {{end}}
+    <!-- Only show when database connection exists -->
+    {{if .ProjectDatabase}}
+        <!-- Schema Selection Section -->
+        <div class="card bg-base-100 shadow-lg w-full">
+            <div class="card-body">
+                <h2 class="card-title text-lg font-medium mb-4">1. Select Schema(s)</h2>
+                <p class="text-base-content/70 mb-4">Choose one or more schemas from your connected database to use in your project.</p>
 
                 <div class="flex flex-col gap-4">
-                    <label for="schemaName">Schemas:</label>
-                    <select name="schemaName" id="schemaName" class="select select-bordered w-full h-40" size="5" multiple>
-                        <!-- Show schema options with ID as value and name as display text -->
-                        {{range .SchemaList}}
-                        <option value="{{.}}">{{.}}</option>
+                    <!-- Schema Selection -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-medium">Available Schemas in Database</span>
+                            <span class="label-text-alt">Hold Ctrl/Cmd to select multiple schemas</span>
+                        </label>
+                        
+                        {{if .SchemaList}}
+                            <div class="border rounded-lg bg-base-200 p-2">
+                                <select id="schemaName" class="select select-bordered w-full h-40" size="5" multiple>
+                                    {{range .SchemaList}}
+                                        <option value="{{.}}">{{.}}</option>
+                                    {{end}}
+                                </select>
+                            </div>
+                        {{else}}
+                            <div class="alert alert-error mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <span>No schemas found in the connected database. Please check your database connection or connect to a different database.</span>
+                            </div>
                         {{end}}
-                    </select>
-                    <label class="label">
-                        <span class="label-text-alt">Hold Ctrl/Cmd to select multiple schemas</span>
-                    </label>
+                    </div>
 
-                    <button type="submit" id="fetchTables" class="btn btn-primary w-full">Fetch Tables</button>
-                </div>
-            </form>
-
-            {{else}}
-            <div class="bg-base-200 rounded-lg p-6 shadow-md">
-                <p class="text-base-content">No schemas available for this project, please add a schema to
-                    continue.</p>
-            </div>
-            {{end}}
-
-        </div>
-    </div>
-
-    <!-- Tables Selection Section -->
-    <div id="tablesSection" class="card bg-base-100 shadow-lg w-full" style="display: none;">
-        <div class="card-body">
-            <h2 class="card-title text-lg font-medium mb-4">2. Select Tables and Columns</h2>
-
-            <!-- Loading indicator -->
-            <div id="tablesLoading" class="w-full flex justify-center items-center py-8">
-                <span class="loading loading-spinner loading-lg text-primary"></span>
-                <p class="ml-3">Loading tables...</p>
-            </div>
-
-            <!-- Error message area -->
-            <div id="tablesError" class="alert alert-error mb-4" style="display: none;"></div>
-
-            <!-- Search bar for tables -->
-            <div class="mb-6">
-                <div class="form-control w-full">
-                    <input type="text" placeholder="Search tables..." id="table-search"
-                        class="input input-bordered w-full"/>
+                    <!-- Load Tables Button -->
+                    {{if .SchemaList}}
+                    <button type="button" id="loadTablesBtn" class="btn btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M8 6h13"></path>
+                            <path d="M8 12h13"></path>
+                            <path d="M8 18h13"></path>
+                            <path d="M3 6h.01"></path>
+                            <path d="M3 12h.01"></path>
+                            <path d="M3 18h.01"></path>
+                        </svg>
+                        Load Tables from Selected Schemas
+                    </button>
+                    {{end}}
                 </div>
             </div>
+        </div>
 
-            <!-- Tables container -->
-            <div class="space-y-4" id="tables-container">
-                <!-- Table entries will be inserted here dynamically -->
+        <!-- Tables Selection Section -->
+        <div id="tablesSection" class="card bg-base-100 shadow-lg w-full {{if not .ProjectSchemas}}hidden{{end}}">
+            <div class="card-body">
+                <h2 class="card-title text-lg font-medium mb-4">2. Select Tables and Columns</h2>
+                <p class="text-base-content/70 mb-4">Choose which tables and columns you want to make available to your AI assistant.</p>
+
+                <!-- Loading indicator -->
+                <div id="tablesLoading" class="w-full flex justify-center items-center py-8 hidden">
+                    <span class="loading loading-spinner loading-lg text-primary"></span>
+                    <p class="ml-3">Loading tables...</p>
+                </div>
+
+                <!-- Error message area -->
+                <div id="tablesError" class="alert alert-error mb-4 hidden"></div>
+
+                <!-- Tables Container Header -->
+                <div class="flex flex-col space-y-4">
+                    <!-- Search and Controls -->
+                    <div class="flex flex-col md:flex-row gap-4 items-center">
+                        <div class="form-control flex-grow">
+                            <div class="join w-full">
+                                <div class="join-item flex items-center bg-base-200 px-3">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                    </svg>
+                                </div>
+                                <input type="text" placeholder="Search tables..." id="table-search" class="join-item input input-bordered w-full"/>
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-2 items-center">
+                            <button id="selectAllTables" class="btn btn-sm btn-outline">Select All</button>
+                            <button id="deselectAllTables" class="btn btn-sm btn-outline">Deselect All</button>
+                            <div class="dropdown dropdown-bottom dropdown-end">
+                                <label tabindex="0" class="btn btn-sm btn-outline">Filter</label>
+                                <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                                    <li><a id="filterBySchemaBtn">By Schema</a></li>
+                                    <li><a id="filterAlreadySelectedBtn">Already Selected</a></li>
+                                    <li><a id="filterNotSelectedBtn">Not Selected</a></li>
+                                    <li><a id="resetFiltersBtn">Reset Filters</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Schema filter chips -->
+                    <div id="schema-filter-chips" class="flex flex-wrap gap-2 hidden">
+                        <!-- Will be populated by JS -->
+                    </div>
+
+                    <!-- Tables list -->
+                    <div class="divider my-2"></div>
+                    
+                    <!-- Empty state -->
+                    <div id="no-tables-message" class="py-8 text-center hidden">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-4 opacity-50">
+                            <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 1 3-3H3a3 3 0 0 1 3-3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 1-3 3h21a3 3 0 0 1-3 3 3 3 0 0 0-3 3V6a3 3 0 0 0-3-3z"></path>
+                        </svg>
+                        <p class="text-base-content/70">No tables found. Please select at least one schema first.</p>
+                    </div>
+                    
+                    <!-- Table cards container -->
+                    <div class="space-y-4" id="tables-container">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Submit Button for selected tables -->
+                <div id="tableSubmitSection" class="mt-6 {{if not .ProjectSchemas}}hidden{{end}}">
+                    <button type="button" id="updateDataSource" class="btn btn-primary btn-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                            <polyline points="7 3 7 8 15 8"></polyline>
+                        </svg>
+                        Save Selected Tables
+                    </button>
+                </div>
             </div>
         </div>
-    </div>
-
-    <!-- Submit Button Section (for selected tables) -->
-    <div id="tableSubmitSection" class="card-actions justify-end mt-4 mb-8" style="display: none;">
-        <button type="button" id="updateDataSource" class="btn btn-primary btn-lg">Update data source</button>
-    </div>
+    {{else}}
+        <!-- Show placeholder message when no database connection exists -->
+        <div class="card bg-base-100 shadow-xl mb-6">
+            <div class="card-body text-center py-12">
+                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-4 opacity-50">
+                    <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                </svg>
+                <h2 class="text-xl font-bold mb-2">Connect a Database First</h2>
+                <p class="text-base-content/70 mb-4">You need to set up a database connection before you can configure schemas and tables.</p>
+            </div>
+        </div>
+    {{end}}
 </div>
 
 <!-- Table entry template to be cloned by JavaScript -->
 <template id="table-entry-template">
-    <div class="table-entry card bg-base-200 p-4">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <input type="checkbox" class="table-checkbox checkbox checkbox-primary" />
-                <div>
-                    <h3 class="table-name font-medium text-lg"></h3>
-                    <p class="table-description text-sm text-base-content/70"></p>
+    <div class="table-entry card bg-base-200 hover:shadow-md transition-shadow">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <input type="checkbox" class="table-checkbox checkbox checkbox-primary" />
+                    <div class="flex-1">
+                        <h3 class="table-name font-medium text-lg"></h3>
+                        <div class="flex items-center gap-2">
+                            <span class="badge table-schema-badge"></span>
+                            <p class="table-description text-sm text-base-content/70"></p>
+                        </div>
+                    </div>
                 </div>
+                <button class="btn btn-sm btn-circle toggle-columns-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" 
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
             </div>
-            <button class="btn btn-sm btn-ghost toggle-columns-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" 
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-            </button>
-        </div>
-        <div class="columns-list mt-3 hidden">
-            <div class="divider my-2"></div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 columns-grid">
-                <!-- Column entries will be added here -->
+            <div class="columns-list mt-3 hidden">
+                <div class="divider my-2"></div>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium">Columns</span>
+                    <div class="space-x-2">
+                        <button class="select-all-columns btn btn-xs btn-outline">Select All</button>
+                        <button class="deselect-all-columns btn btn-xs btn-outline">Deselect All</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 columns-grid">
+                    <!-- Column entries will be added here -->
+                </div>
             </div>
         </div>
     </div>
@@ -113,7 +196,7 @@
 
 <!-- Column entry template -->
 <template id="column-entry-template">
-    <div class="column-entry flex items-center space-x-2">
+    <div class="column-entry flex items-center space-x-2 p-2 rounded hover:bg-base-300">
         <input type="checkbox" class="column-checkbox checkbox checkbox-sm checkbox-secondary" />
         <div>
             <p class="column-name font-medium"></p>
@@ -122,25 +205,51 @@
     </div>
 </template>
 
+<!-- Schema filter chip template -->
+<template id="schema-chip-template">
+    <div class="schema-filter-chip badge badge-lg gap-2 cursor-pointer">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-4 h-4 stroke-current">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+    </div>
+</template>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const schemaForm = document.getElementById('schemaForm');
     const tablesSection = document.getElementById('tablesSection');
     const tablesLoading = document.getElementById('tablesLoading');
     const tablesError = document.getElementById('tablesError');
     const tablesContainer = document.getElementById('tables-container');
     const tableSearch = document.getElementById('table-search');
     const tableSubmitSection = document.getElementById('tableSubmitSection');
+    const noTablesMessage = document.getElementById('no-tables-message');
+    const schemaFilterChips = document.getElementById('schema-filter-chips');
     
-    // Schema form submission handling
-    if (schemaForm) {
-        schemaForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
+    // Selection controls
+    const selectAllTablesBtn = document.getElementById('selectAllTables');
+    const deselectAllTablesBtn = document.getElementById('deselectAllTables');
+    const filterBySchemaBtn = document.getElementById('filterBySchemaBtn');
+    const filterAlreadySelectedBtn = document.getElementById('filterAlreadySelectedBtn');
+    const filterNotSelectedBtn = document.getElementById('filterNotSelectedBtn');
+    const resetFiltersBtn = document.getElementById('resetFiltersBtn');
+    
+    // Track already selected tables and schemas (for visual indicators)
+    let selectedTables = new Set();
+    let availableSchemas = new Set();
+    let activeSchemaFilters = new Set();
+    let allTables = [];
+    
+    // Initial state - only show schema selection initially
+    tablesSection.classList.add('hidden');
+    
+    // Load tables button handler
+    const loadTablesBtn = document.getElementById('loadTablesBtn');
+    if (loadTablesBtn) {
+        loadTablesBtn.addEventListener('click', function() {
             // Show tables section and loading indicator
-            tablesSection.style.display = 'block';
-            tablesLoading.style.display = 'flex';
-            tablesError.style.display = 'none';
+            tablesSection.classList.remove('hidden');
+            tablesLoading.classList.remove('hidden');
+            tablesError.classList.add('hidden');
             tablesContainer.innerHTML = '';
             
             // Get selected schemas
@@ -149,35 +258,49 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (selectedSchemas.length === 0) {
                 tablesError.textContent = 'Please select at least one schema';
-                tablesError.style.display = 'block';
-                tablesLoading.style.display = 'none';
+                tablesError.classList.remove('hidden');
+                tablesLoading.classList.add('hidden');
                 return;
             }
             
-            // Get form data
-            const formData = new FormData(schemaForm);
-            const projectId = formData.get('project_id');
-            const csrfToken = formData.get('csrf_token');
+            // Get CSRF token
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
             
-            try {
-                // First, submit the schema selection to create schema in backend
-                const schemaResponse = await fetch('/schema/create', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!schemaResponse.ok) {
-                    throw new Error('Failed to process schema selection');
-                }
-                
-                // Now for each schema ID, fetch its tables
-                let allTables = [];
-                
-                for (const schemaId of selectedSchemas) {
-                    console.log(`Fetching tables for schema ID: ${schemaId}`);
+            // Load tables directly without creating schemas
+            loadTablesForSchemas(selectedSchemas);
+        });
+    }
+    
+    // Function to load tables for selected schemas
+    async function loadTablesForSchemas(selectedSchemas) {
+        try {
+            tablesLoading.classList.remove('hidden');
+            tableSubmitSection.classList.remove('hidden');
+            noTablesMessage.classList.add('hidden');
+            tablesContainer.innerHTML = '';
+            
+            // Get project ID and CSRF token
+            const projectId = document.querySelector('input[name="project_id"]').value;
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            
+            if (selectedSchemas.length === 0) {
+                noTablesMessage.classList.remove('hidden');
+                tablesLoading.classList.add('hidden');
+                return;
+            }
+            
+            // Clear existing data
+            allTables = [];
+            availableSchemas.clear();
+            
+            // Fetch tables for each selected schema
+            for (const schemaName of selectedSchemas) {
+                try {
+                    // Add schema to available list
+                    availableSchemas.add(schemaName);
                     
-                    // Fetch tables for schema ID (not schema name)
-                    const tablesResponse = await fetch(`/api/schema/${schemaId}/tables`, {
+                    // Fetch tables for this schema
+                    const response = await fetch(`/api/schema/${schemaName}/tables?project_id=${projectId}`, {
                         method: 'GET',
                         headers: {
                             'X-CSRF-Token': csrfToken,
@@ -185,71 +308,71 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     });
                     
-                    if (!tablesResponse.ok) {
-                        console.error(`Server response for schema ${schemaId}:`, await tablesResponse.text());
-                        throw new Error(`Failed to fetch tables for schema ID: ${schemaId}`);
+                    if (!response.ok) {
+                        console.warn(`Error fetching tables for schema ${schemaName}: ${response.status}`);
+                        continue; // Continue with other schemas
                     }
                     
-                    let tablesData;
-                    try {
-                        tablesData = await tablesResponse.json();
-                        console.log(`Tables data for schema ${schemaId}:`, tablesData);
-                    } catch (e) {
-                        console.error(`Error parsing JSON for schema ${schemaId}:`, e);
-                        throw new Error(`Failed to parse tables data for schema ID: ${schemaId}`);
-                    }
+                    const tableData = await response.json();
                     
-                    // If tablesData is not an array, wrap it or handle accordingly
-                    if (!Array.isArray(tablesData)) {
-                        console.warn(`Expected array for tables data, got:`, tablesData);
-                        tablesData = tablesData.tables || [];
-                    }
+                    // Process tables
+                    const tables = Array.isArray(tableData) ? tableData : tableData.tables || [];
                     
-                    // Find the schema name from the select option
-                    const schemaOption = Array.from(schemaSelect.options).find(opt => opt.value === schemaId);
-                    const schemaName = schemaOption ? schemaOption.textContent : schemaId;
-                    
-                    allTables = allTables.concat(tablesData.map(table => ({
+                    // Add schema name to each table
+                    const tablesWithSchema = tables.map(table => ({
                         ...table,
-                        schema: schemaName // Add schema name for display purposes
-                    })));
+                        schema: schemaName
+                    }));
+                    
+                    // Add to our collection
+                    allTables = [...allTables, ...tablesWithSchema];
+                    
+                } catch (err) {
+                    console.error(`Error processing schema ${schemaName}:`, err);
+                    // Continue with other schemas
                 }
-                
-                // Render tables in the UI
-                renderTables(allTables);
-                
-                // Show submit button for selected tables
-                tableSubmitSection.style.display = 'flex';
-                
-            } catch (error) {
-                console.error('Error:', error);
-                tablesError.textContent = error.message || 'An error occurred while fetching tables';
-                tablesError.style.display = 'block';
-            } finally {
-                tablesLoading.style.display = 'none';
             }
-        });
+            
+            if (allTables.length > 0) {
+                // Render tables and update filter chips
+                renderTables(allTables);
+                updateSchemaFilterChips();
+            } else {
+                noTablesMessage.classList.remove('hidden');
+                noTablesMessage.querySelector('p').textContent = 'No tables found in the selected schemas.';
+            }
+            
+        } catch (error) {
+            console.error('Error loading tables:', error);
+            tablesError.textContent = error.message || 'An error occurred while loading tables';
+            tablesError.classList.remove('hidden');
+        } finally {
+            tablesLoading.classList.add('hidden');
+        }
     }
     
     // Function to render tables
     function renderTables(tables) {
         console.log("Rendering tables:", tables);
         
-        if (!tables || tables.length === 0) {
-            tablesContainer.innerHTML = '<p class="text-center py-4">No tables found in the selected schemas</p>';
-            return;
-        }
-        
         // Clear container
         tablesContainer.innerHTML = '';
         
-        // Get template
+        if (!tables || tables.length === 0) {
+            noTablesMessage.classList.remove('hidden');
+            return;
+        }
+        
+        noTablesMessage.classList.add('hidden');
+        
+        // Get templates
         const tableTemplate = document.getElementById('table-entry-template');
         const columnTemplate = document.getElementById('column-entry-template');
         
         if (!tableTemplate || !columnTemplate) {
             console.error("Table or column template not found");
-            tablesContainer.innerHTML = '<p class="alert alert-error">Error: Template not found</p>';
+            tablesError.textContent = 'Error: Template not found';
+            tablesError.classList.remove('hidden');
             return;
         }
         
@@ -269,13 +392,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 const tableId = table.table_id || table.tableId || '';
                 const description = table.description || table.tableDescription || 'No description available';
                 
-                tableEntry.querySelector('.table-name').textContent = `${schemaName}.${tableName}`;
+                tableEntry.querySelector('.table-name').textContent = tableName;
+                tableEntry.querySelector('.table-schema-badge').textContent = schemaName;
                 tableEntry.querySelector('.table-description').textContent = description;
                 
                 // Set data attributes for filtering
                 tableEntry.dataset.tableName = tableName.toLowerCase();
                 tableEntry.dataset.schemaName = schemaName.toLowerCase();
                 tableEntry.dataset.tableId = tableId;
+                
+                // Check if this table is already selected
+                const isSelected = selectedTables.has(tableId);
+                if (isSelected) {
+                    tableEntry.classList.add('bg-primary/10', 'border', 'border-primary');
+                    tableEntry.querySelector('.table-checkbox').checked = true;
+                }
                 
                 // Add columns if available
                 const columnsGrid = tableEntry.querySelector('.columns-grid');
@@ -298,6 +429,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         checkbox.dataset.columnId = columnId;
                         checkbox.dataset.columnName = columnName;
                         
+                        // Check if this column is already selected
+                        if (isSelected) {
+                            checkbox.checked = true;
+                        }
+                        
                         columnsGrid.appendChild(columnEntry);
                     });
                 } else {
@@ -312,16 +448,64 @@ document.addEventListener('DOMContentLoaded', function() {
                     columnsList.classList.toggle('hidden');
                     
                     // Toggle icon direction
-                    const icon = toggleBtn.querySelector('svg');
+                    const svg = toggleBtn.querySelector('svg');
                     if (columnsList.classList.contains('hidden')) {
-                        icon.innerHTML = '<polyline points="6 9 12 15 18 9"></polyline>';
+                        svg.innerHTML = '<polyline points="6 9 12 15 18 9"></polyline>';
                     } else {
-                        icon.innerHTML = '<polyline points="18 15 12 9 6 15"></polyline>';
+                        svg.innerHTML = '<polyline points="18 15 12 9 6 15"></polyline>';
                     }
+                });
+                
+                // Add checkbox behavior for table selection
+                const tableCheckbox = tableEntry.querySelector('.table-checkbox');
+                tableCheckbox.addEventListener('change', function() {
+                    if (this.checked) {
+                        selectedTables.add(tableId);
+                        tableEntry.classList.add('bg-primary/10', 'border', 'border-primary');
+                        
+                        // Select all columns
+                        const columnCheckboxes = tableEntry.querySelectorAll('.column-checkbox');
+                        columnCheckboxes.forEach(checkbox => {
+                            checkbox.checked = true;
+                        });
+                    } else {
+                        selectedTables.delete(tableId);
+                        tableEntry.classList.remove('bg-primary/10', 'border', 'border-primary');
+                        
+                        // Deselect all columns
+                        const columnCheckboxes = tableEntry.querySelectorAll('.column-checkbox');
+                        columnCheckboxes.forEach(checkbox => {
+                            checkbox.checked = false;
+                        });
+                    }
+                });
+                
+                // Add select/deselect all columns functionality
+                const selectAllColumnsBtn = tableEntry.querySelector('.select-all-columns');
+                const deselectAllColumnsBtn = tableEntry.querySelector('.deselect-all-columns');
+                
+                selectAllColumnsBtn.addEventListener('click', function() {
+                    const columnCheckboxes = tableEntry.querySelectorAll('.column-checkbox');
+                    columnCheckboxes.forEach(checkbox => {
+                        checkbox.checked = true;
+                    });
+                    
+                    // Ensure table is selected too
+                    tableCheckbox.checked = true;
+                    selectedTables.add(tableId);
+                    tableEntry.classList.add('bg-primary/10', 'border', 'border-primary');
+                });
+                
+                deselectAllColumnsBtn.addEventListener('click', function() {
+                    const columnCheckboxes = tableEntry.querySelectorAll('.column-checkbox');
+                    columnCheckboxes.forEach(checkbox => {
+                        checkbox.checked = false;
+                    });
                 });
                 
                 // Add to container
                 tablesContainer.appendChild(tableEntry);
+                
             } catch (e) {
                 console.error("Error rendering table:", e, table);
             }
@@ -331,26 +515,197 @@ document.addEventListener('DOMContentLoaded', function() {
         initTableSearch();
     }
     
+    // Update schema filter chips
+    function updateSchemaFilterChips() {
+        // Clear existing chips
+        schemaFilterChips.innerHTML = '';
+        
+        if (availableSchemas.size > 0) {
+            // Create a chip for each schema
+            availableSchemas.forEach(schema => {
+                const chipTemplate = document.getElementById('schema-chip-template');
+                const chip = document.importNode(chipTemplate.content, true).querySelector('.schema-filter-chip');
+                
+                chip.textContent = schema;
+                chip.dataset.schema = schema;
+                
+                // If this schema is an active filter, highlight it
+                if (activeSchemaFilters.has(schema)) {
+                    chip.classList.add('badge-primary');
+                } else {
+                    chip.classList.add('badge-outline');
+                }
+                
+                // Add click handler to toggle filter
+                chip.addEventListener('click', function() {
+                    const schema = this.dataset.schema;
+                    
+                    if (activeSchemaFilters.has(schema)) {
+                        activeSchemaFilters.delete(schema);
+                        this.classList.remove('badge-primary');
+                        this.classList.add('badge-outline');
+                    } else {
+                        activeSchemaFilters.add(schema);
+                        this.classList.remove('badge-outline');
+                        this.classList.add('badge-primary');
+                    }
+                    
+                    // Apply filters
+                    applyTableFilters();
+                });
+                
+                schemaFilterChips.appendChild(chip);
+            });
+            
+            // Show the chips section
+            schemaFilterChips.classList.remove('hidden');
+        } else {
+            schemaFilterChips.classList.add('hidden');
+        }
+    }
+    
+    // Apply all active filters to the table list
+    function applyTableFilters() {
+        const searchTerm = tableSearch.value.toLowerCase();
+        const tableEntries = tablesContainer.querySelectorAll('.table-entry');
+        let visibleCount = 0;
+        
+        tableEntries.forEach(entry => {
+            const tableName = entry.dataset.tableName;
+            const schemaName = entry.dataset.schemaName;
+            const tableId = entry.dataset.tableId;
+            const isSelected = selectedTables.has(tableId);
+            
+            // Apply schema filter
+            let matchesSchemaFilter = true;
+            if (activeSchemaFilters.size > 0) {
+                matchesSchemaFilter = activeSchemaFilters.has(schemaName);
+            }
+            
+            // Apply selection filter
+            let matchesSelectionFilter = true;
+            if (document.getElementById('filterAlreadySelectedBtn').classList.contains('active')) {
+                matchesSelectionFilter = isSelected;
+            } else if (document.getElementById('filterNotSelectedBtn').classList.contains('active')) {
+                matchesSelectionFilter = !isSelected;
+            }
+            
+            // Apply search filter
+            const matchesSearch = tableName.includes(searchTerm) || 
+                                 schemaName.includes(searchTerm);
+            
+            // Show entry if it matches all filters
+            if (matchesSchemaFilter && matchesSelectionFilter && matchesSearch) {
+                entry.style.display = 'block';
+                visibleCount++;
+            } else {
+                entry.style.display = 'none';
+            }
+        });
+        
+        // Show/hide no results message
+        if (visibleCount === 0) {
+            noTablesMessage.classList.remove('hidden');
+            noTablesMessage.querySelector('p').textContent = 'No tables match your filters.';
+        } else {
+            noTablesMessage.classList.add('hidden');
+        }
+    }
+    
     // Table search functionality
     function initTableSearch() {
         if (tableSearch) {
             tableSearch.addEventListener('input', function() {
-                const searchTerm = this.value.toLowerCase();
-                const tableEntries = tablesContainer.querySelectorAll('.table-entry');
-                
-                tableEntries.forEach(entry => {
-                    const tableName = entry.dataset.tableName;
-                    const schemaName = entry.dataset.schemaName;
-                    const searchText = `${schemaName}.${tableName}`;
-                    
-                    if (searchText.includes(searchTerm)) {
-                        entry.style.display = 'block';
-                    } else {
-                        entry.style.display = 'none';
-                    }
-                });
+                applyTableFilters();
             });
         }
+    }
+    
+    // Set up select all/none buttons
+    if (selectAllTablesBtn) {
+        selectAllTablesBtn.addEventListener('click', function() {
+            const tableEntries = tablesContainer.querySelectorAll('.table-entry');
+            tableEntries.forEach(entry => {
+                if (entry.style.display !== 'none') { // Only select visible tables
+                    const checkbox = entry.querySelector('.table-checkbox');
+                    checkbox.checked = true;
+                    
+                    // Trigger change event
+                    const event = new Event('change');
+                    checkbox.dispatchEvent(event);
+                }
+            });
+        });
+    }
+    
+    if (deselectAllTablesBtn) {
+        deselectAllTablesBtn.addEventListener('click', function() {
+            const tableEntries = tablesContainer.querySelectorAll('.table-entry');
+            tableEntries.forEach(entry => {
+                if (entry.style.display !== 'none') { // Only deselect visible tables
+                    const checkbox = entry.querySelector('.table-checkbox');
+                    checkbox.checked = false;
+                    
+                    // Trigger change event
+                    const event = new Event('change');
+                    checkbox.dispatchEvent(event);
+                }
+            });
+        });
+    }
+    
+    // Set up filter buttons
+    if (filterBySchemaBtn) {
+        filterBySchemaBtn.addEventListener('click', function() {
+            // Show schema filter chips
+            schemaFilterChips.classList.remove('hidden');
+        });
+    }
+    
+    if (filterAlreadySelectedBtn) {
+        filterAlreadySelectedBtn.addEventListener('click', function() {
+            // Toggle active state
+            this.classList.toggle('active');
+            if (this.classList.contains('active')) {
+                // Deactivate the "not selected" filter
+                filterNotSelectedBtn.classList.remove('active');
+            }
+            
+            // Apply filters
+            applyTableFilters();
+        });
+    }
+    
+    if (filterNotSelectedBtn) {
+        filterNotSelectedBtn.addEventListener('click', function() {
+            // Toggle active state
+            this.classList.toggle('active');
+            if (this.classList.contains('active')) {
+                // Deactivate the "already selected" filter
+                filterAlreadySelectedBtn.classList.remove('active');
+            }
+            
+            // Apply filters
+            applyTableFilters();
+        });
+    }
+    
+    if (resetFiltersBtn) {
+        resetFiltersBtn.addEventListener('click', function() {
+            // Clear search
+            tableSearch.value = '';
+            
+            // Clear schema filters
+            activeSchemaFilters.clear();
+            updateSchemaFilterChips();
+            
+            // Clear selection filters
+            filterAlreadySelectedBtn.classList.remove('active');
+            filterNotSelectedBtn.classList.remove('active');
+            
+            // Reset display
+            applyTableFilters();
+        });
     }
     
     // Handle submit button for selected tables
@@ -366,8 +721,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (tableCheckbox.checked) {
                     const tableId = entry.dataset.tableId;
-                    const tableName = entry.querySelector('.table-name').textContent;
                     const schemaName = entry.dataset.schemaName;
+                    const tableName = entry.querySelector('.table-name').textContent;
                     
                     // Get selected columns
                     const selectedColumns = [];
@@ -380,24 +735,35 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                     });
                     
-                    selectedTables.push({
-                        table_id: tableId,
-                        schema_name: schemaName,
-                        table_name: tableName,
-                        columns: selectedColumns
-                    });
+                    // Only add if there are selected columns
+                    if (selectedColumns.length > 0) {
+                        selectedTables.push({
+                            table_id: tableId,
+                            schema_name: schemaName,
+                            table_name: tableName,
+                            columns: selectedColumns
+                        });
+                    }
                 }
             });
             
             if (selectedTables.length === 0) {
-                alert('Please select at least one table');
+                // Show error message
+                tablesError.textContent = 'Please select at least one table and column';
+                tablesError.classList.remove('hidden');
+                
+                // Scroll to error message
+                tablesError.scrollIntoView({ behavior: 'smooth' });
                 return;
             }
             
             // Submit selection to backend
-            const formData = new FormData(schemaForm);
-            const projectId = formData.get('project_id');
-            const csrfToken = formData.get('csrf_token');
+            const projectId = document.querySelector('input[name="project_id"]').value;
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            
+            // Show loading indicator
+            this.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Saving...';
+            this.disabled = true;
             
             fetch('/api/project/tables', {
                 method: 'POST',
@@ -417,13 +783,47 @@ document.addEventListener('DOMContentLoaded', function() {
                 return response.json();
             })
             .then(data => {
-                // Show success message and redirect
-                alert('Data source updated successfully');
-                window.location.reload();
+                // Show success message
+                const successAlert = document.createElement('div');
+                successAlert.className = 'alert alert-success mb-4';
+                successAlert.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Tables saved successfully! Your AI assistant can now access these tables.</span>
+                `;
+                
+                // Insert at the top of the tables section
+                tablesSection.querySelector('.card-body').insertBefore(
+                    successAlert, 
+                    tablesSection.querySelector('.card-body').firstChild
+                );
+                
+                // Scroll to success message
+                successAlert.scrollIntoView({ behavior: 'smooth' });
+                
+                // Automatically remove after 5 seconds
+                setTimeout(() => {
+                    successAlert.remove();
+                }, 5000);
+                
+                // Reset button
+                this.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Save Selected Tables';
+                this.disabled = false;
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert(error.message || 'An error occurred while updating data source');
+                
+                // Show error message
+                tablesError.textContent = error.message || 'An error occurred while updating data source';
+                tablesError.classList.remove('hidden');
+                
+                // Scroll to error message
+                tablesError.scrollIntoView({ behavior: 'smooth' });
+                
+                // Reset button
+                this.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Save Selected Tables';
+                this.disabled = false;
             });
         });
     }

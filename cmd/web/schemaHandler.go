@@ -33,7 +33,7 @@ type TableInfo struct {
 
 // getSchemaTablesAPI fetches tables for a specific schema from external API
 func (app *application) getSchemaTablesAPI(w http.ResponseWriter, r *http.Request) {
-	// Get schema name from URL
+	// Get schema ID from URL
 	params := httprouter.ParamsFromContext(r.Context())
 	schemaName := params.ByName("schema_name")
 
@@ -54,7 +54,6 @@ func (app *application) getSchemaTablesAPI(w http.ResponseWriter, r *http.Reques
 	projectIDStr := r.URL.Query().Get("project_id")
 	projectID, err := uuid.Parse(projectIDStr)
 	if err != nil {
-		app.errorLog.Printf("Invalid project ID: %v", err)
 		app.clientError(w, http.StatusBadRequest)
 		return
 	}
@@ -62,23 +61,55 @@ func (app *application) getSchemaTablesAPI(w http.ResponseWriter, r *http.Reques
 	// Find the project database
 	projectDatabase, err := app.projectDatabase.GetByProjectID(projectID)
 	if err != nil {
-		app.errorLog.Printf("Failed to get project database: %v", err)
 		app.serverError(w, err)
 		return
 	}
 
-	// Fetch schema ID using the schema name and database ID
-	schemaID, err := app.schemas.GetSchemaIDByName(schemaName, projectDatabase.ID)
+	// We need to get the tables from the schema. First, need to check if this schema exists
+	// in the database at all. We shouldn't create schemas that don't exist.
+	
+	// Get all available schemas in the database
+	availableSchemas, err := app.externalAPI.GetDatabaseSchemas(projectDatabase.ID)
 	if err != nil {
-		app.errorLog.Printf("Failed to get schema ID for schema %s: %v", schemaName, err)
-		app.serverError(w, err)
+		app.serverError(w, fmt.Errorf("failed to retrieve schemas: %w", err))
 		return
+	}
+	
+	// Check if the requested schema exists in the available schemas
+	schemaExists := false
+	for _, schema := range *availableSchemas {
+		if schema == schemaName {
+			schemaExists = true
+			break
+		}
+	}
+	
+	if !schemaExists {
+		app.clientError(w, http.StatusNotFound)
+		return
+	}
+	
+	// Now we know the schema exists in the database, so we can try to get tables
+	var schemaID uuid.UUID
+	
+	// If we have the schema in our system already, get its ID
+	schemaID, err = app.schemas.GetSchemaIDByName(schemaName, projectDatabase.ID)
+	if err != nil {
+		// If schema reference doesn't exist in our system yet, we need its ID from the external API
+		// This is just to get a reference to the schema, not to create it
+		// We're using an existing schema from the database
+		schemaResponse, err := app.externalAPI.CreateDatabaseSchema(projectDatabase.ID, []string{schemaName})
+		if err != nil {
+			app.serverError(w, fmt.Errorf("failed to reference schema: %w", err))
+			return
+		}
+		
+		schemaID = schemaResponse.SchemaID
 	}
 
 	// Use the external API client to get tables for the schema
 	tables, err := app.externalAPI.GetSchemaTables(schemaID)
 	if err != nil {
-		app.errorLog.Printf("Error fetching tables for schema %s: %v", schemaName, err)
 		app.serverError(w, fmt.Errorf("error fetching tables: %w", err))
 		return
 	}
@@ -91,7 +122,7 @@ func (app *application) getSchemaTablesAPI(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-// Handler for selected tables
+// saveProjectTables handles saving the selected tables and columns for a project
 func (app *application) saveProjectTables(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from session
 	userID := app.userIdFromSession(r)
@@ -100,43 +131,77 @@ func (app *application) saveProjectTables(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Parse request body
-	var requestData struct {
-		ProjectID string `json:"project_id"`
-		Tables    []struct {
-			TableID    string `json:"table_id"`
-			SchemaName string `json:"schema_name"`
-			TableName  string `json:"table_name"`
-			Columns    []struct {
-				ColumnID   string `json:"column_id"`
-				ColumnName string `json:"column_name"`
-			} `json:"columns"`
-		} `json:"tables"`
+	// Define the request structure to parse the JSON request
+	type columnSelection struct {
+		ColumnID   string `json:"column_id"`
+		ColumnName string `json:"column_name"`
 	}
 
-	err := json.NewDecoder(r.Body).Decode(&requestData)
+	type tableSelection struct {
+		TableID    string            `json:"table_id"`
+		SchemaName string            `json:"schema_name"`
+		TableName  string            `json:"table_name"`
+		Columns    []columnSelection `json:"columns"`
+	}
+
+	type requestData struct {
+		ProjectID string          `json:"project_id"`
+		Tables    []tableSelection `json:"tables"`
+	}
+
+	// Parse request body
+	var reqData requestData
+	err := json.NewDecoder(r.Body).Decode(&reqData)
 	if err != nil {
 		app.clientError(w, http.StatusBadRequest)
 		return
 	}
 
 	// Parse project ID
-	_, err = uuid.Parse(requestData.ProjectID)
+	projectID, err := uuid.Parse(reqData.ProjectID)
 	if err != nil {
 		app.clientError(w, http.StatusBadRequest)
 		return
 	}
 
-	// For now, just return success
-	// In a production app, you'd forward this to your external API
+	// Verify project exists and belongs to the user
+	project, err := app.projects.Get(projectID)
+	if err != nil {
+		app.notFound(w)
+		return
+	}
 	
-	// Build success response
-	responseData := map[string]interface{}{
+	if project.UserID != userID {
+		app.clientError(w, http.StatusForbidden)
+		return
+	}
+
+	// Convert to the format expected by the external API
+	var selectedTables []map[string]interface{}
+	for _, table := range reqData.Tables {
+		tableObj := map[string]interface{}{
+			"table_id":    table.TableID,
+			"schema_name": table.SchemaName,
+			"table_name":  table.TableName,
+			"columns":     table.Columns,
+		}
+		selectedTables = append(selectedTables, tableObj)
+	}
+
+	// Forward to the external API
+	err = app.externalAPI.SaveSelectedTables(projectID, selectedTables)
+	if err != nil {
+		app.serverError(w, fmt.Errorf("error saving tables: %w", err))
+		return
+	}
+
+	// Return success response
+	response := map[string]interface{}{
 		"status":  "success",
 		"message": "Selected tables saved successfully",
 	}
 
-	// Return JSON response
 	w.Header().Set(contentTypeHeader, applicationJSON)
-	json.NewEncoder(w).Encode(responseData)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
 }

@@ -38,11 +38,22 @@ func humanDate(t time.Time) string {
 	return t.UTC().Format("02 Jan 2006 at 15:04")
 }
 
+// Check if a value exists in a slice of strings
+func contains(slice []string, value string) bool {
+	for _, item := range slice {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}
+
 var functions = template.FuncMap{
 	"humanDate":        humanDate,
 	"formatFileSize":   formatFileSize,
 	"roleBadgeClass":   roleBadgeClass,
 	"statusBadgeClass": statusBadgeClass,
+	"contains":         contains,
 }
 
 // Role badge helper function
