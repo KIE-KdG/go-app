@@ -106,6 +106,10 @@ run `air` to start the live reload.
 
 Also, you can run `npm run dev`
 
+## Screenshots
+
+Goto the [screenshots folder](./img/screenshots) to see some screenshots of the application.
+
 # License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
