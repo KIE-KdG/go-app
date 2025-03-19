@@ -19,11 +19,6 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// Helper function to send JSON through websocket
-func sendWSJSON(ws *websocket.Conn, data interface{}) error {
-	return ws.WriteJSON(data)
-}
-
 func (app *application) serverError(w http.ResponseWriter, err error) {
 	trace := fmt.Sprintf("%s\n%s", err.Error(), debug.Stack())
 	app.errorLog.Output(2, trace)
@@ -93,31 +88,25 @@ func (app *application) isAuthenticated(r *http.Request) bool {
 	return app.sessionManager.Exists(r.Context(), "authenticatedUserID")
 }
 
-func (app *application) userIdFromSession(r *http.Request) int {
-	return app.sessionManager.GetInt(r.Context(), "authenticatedUserID")
-}
-
-// New helper functions
-
-// writeJSON writes a JSON response with the specified status code and data
-func (app *application) writeJSON(w http.ResponseWriter, status int, data interface{}, headers ...http.Header) error {
-	jsonData, err := json.Marshal(data)
+func (app *application) userIdFromSession(r *http.Request) uuid.UUID {
+	uuidStr := app.sessionManager.GetString(r.Context(), "authenticatedUserID")
+	id, err := uuid.Parse(uuidStr)
 	if err != nil {
-		return err
+			return uuid.Nil
 	}
-
-	// Add any custom headers
-	if len(headers) > 0 {
-		for key, value := range headers[0] {
-			w.Header()[key] = value
-		}
-	}
-
+	return id
+}
+// writeJSON encodes an interface to a JSON response
+func (app *application) writeJSON(w http.ResponseWriter, status int, data interface{}) {
+	// Set the Content-Type header
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	w.Write(jsonData)
-
-	return nil
+	
+	// Encode the data to JSON
+	err := json.NewEncoder(w).Encode(data)
+	if err != nil {
+		app.serverError(w, err)
+	}
 }
 
 // readJSON decodes a JSON request body into a destination struct
@@ -133,6 +122,34 @@ func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst int
 	}
 
 	return nil
+}
+
+// debugGeoJSON ensures we're generating valid JSON for the template
+func (app *application) debugGeoJSON(geoJsonMap map[string]interface{}) (string, error) {
+	// Marshal the map to pretty JSON 
+	jsonBytes, err := json.MarshalIndent(geoJsonMap, "", "  ")
+	if err != nil {
+		return "", err
+	}
+
+	// Convert to string
+	jsonStr := string(jsonBytes)
+
+	// Log a sample of the JSON for debugging
+	if len(jsonStr) > 100 {
+		app.infoLog.Printf("JSON sample (first 100 chars): %s...", jsonStr[:100])
+	} else {
+		app.infoLog.Printf("JSON sample: %s", jsonStr)
+	}
+
+	// Validate the JSON by attempting to parse it back
+	var validate interface{}
+	if err := json.Unmarshal(jsonBytes, &validate); err != nil {
+		app.errorLog.Printf("Generated invalid JSON: %v", err)
+		return "", fmt.Errorf("generated invalid JSON: %w", err)
+	}
+
+	return jsonStr, nil
 }
 
 // parseUUID parses a UUID string and handles errors
@@ -167,4 +184,18 @@ func (app *application) processFormValidation(w http.ResponseWriter, r *http.Req
 func (app *application) setFlashAndRedirect(w http.ResponseWriter, r *http.Request, flashMessage, redirectURL string, status int) {
 	app.sessionManager.Put(r.Context(), "flash", flashMessage)
 	http.Redirect(w, r, redirectURL, status)
+}
+
+func (app *application) tryWithRetry(operation func() error, maxRetries int) error {
+	var err error
+	for i := 0; i < maxRetries; i++ {
+			err = operation()
+			if err == nil {
+					return nil
+			}
+			
+			app.errorLog.Printf("Operation failed (attempt %d/%d): %v", i+1, maxRetries, err)
+			time.Sleep(time.Duration(i+1) * 500 * time.Millisecond) // Exponential backoff
+	}
+	return err
 }

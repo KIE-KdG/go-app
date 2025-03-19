@@ -1,10 +1,10 @@
 {{define "enhanced_map_panel"}}
-<div class="flex flex-col h-full">
+<div class="h-full flex flex-col bg-base-100 shadow-lg overflow-hidden">
   <!-- Map header with controls -->
   <div class="bg-base-200 p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
     <div class="flex items-center">
-      <h3 class="text-lg font-bold">Map Visualization</h3>
-      <div class="ml-2">
+      <h3 class="text-lg font-bold">Map</h3>
+      <div class="ml-2" x-show="mapCollection.length > 0">
         <span x-text="currentMapIndex + 1"></span>/<span x-text="mapCollection.length"></span>
       </div>
     </div>
@@ -30,7 +30,7 @@
       </button>
       
       <!-- Close button -->
-      <button @click="mapVisible = false" class="p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-600">
+      <button @click="mapVisible = !mapVisible" class="p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-600">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -43,15 +43,15 @@
   <!-- Map meta information -->
   <div class="bg-base-100 p-4 border-b border-gray-200 dark:border-gray-700">
     <div x-show="currentMap && currentMap.messageText" class="mb-2">
-      <p class="text-sm text-gray-600 dark:text-gray-400 italic">
-        "<span x-text="currentMap.messageText"></span>"
+      <p class="text-sm text-gray-600 dark:text-gray-400 italic truncate">
+        "<span x-text="currentMap ? currentMap.messageText : ''"></span>"
       </p>
     </div>
     
     <!-- Map tiles selector -->
     <div class="flex items-center space-x-2 mb-2">
       <label for="map-style" class="text-sm font-medium">Map Style:</label>
-      <select id="map-style" @change="changeMapStyle($event.target.value)" 
+      <select id="map-style" @change="changeMapStyle($event.target.value, 'main-map-container')" 
               class="select select-sm select-bordered rounded">
         <option value="osm">OpenStreetMap</option>
         <option value="satellite">Satellite</option>
@@ -62,23 +62,25 @@
     <!-- Map information -->
     <div class="text-xs text-gray-600 dark:text-gray-400">
       <span x-show="currentMap && currentMap.featureCount">
-        Features: <span x-text="currentMap.featureCount"></span>
+        Features: <span x-text="currentMap ? currentMap.featureCount : 0"></span>
       </span>
-      <span x-show="currentMap && currentMap.timestamp" class="ml-2">
-        Created: <span x-text="formatTimestamp(currentMap.timestamp)"></span>
-      </span>
+    </div>
+    
+    <!-- No data message -->
+    <div x-show="!currentMap || mapCollection.length === 0" class="text-center p-2 text-gray-500">
+      <p>No map data available yet.</p>
+      <p class="text-sm">Maps will appear when GeoJSON data is received.</p>
     </div>
   </div>
   
   <!-- Thumbnails of available maps -->
-  <div class="bg-base-100 p-2 border-b border-gray-200 dark:border-gray-700 flex overflow-x-auto">
+  <div class="bg-base-100 p-2 border-b border-gray-200 dark:border-gray-700 flex overflow-x-auto" x-show="mapCollection.length > 1">
     <template x-for="(map, index) in mapCollection" :key="map.id">
       <div @click="selectMap(index)" 
            :class="{'border-blue-500 ring-2 ring-blue-500': currentMapIndex === index, 
                    'border-gray-300 dark:border-gray-600': currentMapIndex !== index}"
            class="flex-shrink-0 w-16 h-16 border rounded m-1 cursor-pointer overflow-hidden">
         <div :id="'map-thumb-' + index" class="w-full h-full"></div>
-        <div x-init="initThumbnailMap('map-thumb-' + index, map.geoJSON)"></div>
       </div>
     </template>
   </div>

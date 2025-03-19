@@ -86,22 +86,23 @@ func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
 
 	id, err := app.users.Authenticate(form.Email, form.Password)
 	if err != nil {
-		if errors.Is(err, models.ErrInvalidCredentials) {
-			form.AddNonFieldError("Email or password incorrect")
-			app.renderFormErrors(w, r, form, "login.tmpl.html")
-		} else {
-			app.serverError(w, err)
-		}
-		return
+			if errors.Is(err, models.ErrInvalidCredentials) {
+					form.AddNonFieldError("Email or password incorrect")
+					app.renderFormErrors(w, r, form, "login.tmpl.html")
+			} else {
+					app.serverError(w, err)
+			}
+			return
 	}
-
+	
 	err = app.sessionManager.RenewToken(r.Context())
 	if err != nil {
-		app.serverError(w, err)
-		return
+			app.serverError(w, err)
+			return
 	}
-
-	app.sessionManager.Put(r.Context(), "authenticatedUserID", id)
+	
+	// Store the UUID as a string in the session
+	app.sessionManager.Put(r.Context(), "authenticatedUserID", id.String())
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

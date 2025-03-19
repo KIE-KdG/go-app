@@ -1,35 +1,41 @@
+// models/chats.go
 package models
 
 import (
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-// Chat represents a conversation between users
 type Chat struct {
-	ID          uuid.UUID
-	UserID      int
-	Messages    []Message
-	Created     time.Time
+	ID           uuid.UUID
+	UserID       uuid.UUID
+	Messages     []Message
+	Created      time.Time
 	LastActivity time.Time
 }
 
-// ChatModel handles database operations for chats
 type ChatModel struct {
 	DB *sql.DB
 }
 
-// Insert creates a new chat for a user
-func (m *ChatModel) Insert(userID int) (uuid.UUID, error) {
+func NewChatModel(db *sql.DB) *ChatModel {
+	return &ChatModel{DB: db}
+}
+
+func (m *ChatModel) Insert(userID uuid.UUID) (uuid.UUID, error) {
 	chatID := uuid.New()
 
 	stmt := `
 		INSERT INTO chats (id, user_id, created, last_activity)
-		VALUES (?, ?, ?, ?)
+		VALUES ($1, $2, NOW(), NOW())
+		RETURNING id
 	`
-	_, err := m.DB.Exec(stmt, chatID, userID, time.Now(), time.Now())
+
+	
+	err := m.DB.QueryRow(stmt, chatID, userID).Scan(&chatID)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -37,12 +43,11 @@ func (m *ChatModel) Insert(userID int) (uuid.UUID, error) {
 	return chatID, nil
 }
 
-// RetrieveByUserId gets all chats for a specific user
-func (m *ChatModel) RetrieveByUserId(userId int) ([]*Chat, error) {
+func (m *ChatModel) RetrieveByUserId(userId uuid.UUID) ([]*Chat, error) {
 	stmt := `
 		SELECT id, user_id, created, last_activity
 		FROM chats
-		WHERE user_id = ?
+		WHERE user_id = $1
 		ORDER BY last_activity DESC
 	`
 	rows, err := m.DB.Query(stmt, userId)
@@ -59,7 +64,6 @@ func (m *ChatModel) RetrieveByUserId(userId int) ([]*Chat, error) {
 			return nil, err
 		}
 		
-		// We'll load messages separately via MessageModel
 		chats = append(chats, c)
 	}
 	
@@ -70,12 +74,11 @@ func (m *ChatModel) RetrieveByUserId(userId int) ([]*Chat, error) {
 	return chats, nil
 }
 
-// GetByID retrieves a single chat by its ID
 func (m *ChatModel) GetByID(id uuid.UUID) (*Chat, error) {
 	stmt := `
 		SELECT id, user_id, created, last_activity
 		FROM chats
-		WHERE id = ?
+		WHERE id = $1
 	`
 
 	row := m.DB.QueryRow(stmt, id)
@@ -83,8 +86,8 @@ func (m *ChatModel) GetByID(id uuid.UUID) (*Chat, error) {
 	c := &Chat{}
 	err := row.Scan(&c.ID, &c.UserID, &c.Created, &c.LastActivity)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNoRecord
 		}
 		return nil, err
 	}
@@ -92,21 +95,13 @@ func (m *ChatModel) GetByID(id uuid.UUID) (*Chat, error) {
 	return c, nil
 }
 
-// UpdateLastActivity updates the last_activity timestamp of a chat
 func (m *ChatModel) UpdateLastActivity(chatID uuid.UUID) error {
 	stmt := `
 		UPDATE chats
-		SET last_activity = ?
-		WHERE id = ?
+		SET last_activity = NOW()
+		WHERE id = $1
 	`
 	
-	_, err := m.DB.Exec(stmt, time.Now(), chatID)
-	return err
-}
-
-// Delete removes a chat and its messages (if CASCADE is set up)
-func (m *ChatModel) Delete(id int) error {
-	stmt := `DELETE FROM chats WHERE id = ?`
-	_, err := m.DB.Exec(stmt, id)
+	_, err := m.DB.Exec(stmt, chatID)
 	return err
 }

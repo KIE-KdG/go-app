@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
 	"kdg/be/lab/internal/models"
 	"path/filepath"
@@ -10,16 +11,25 @@ import (
 )
 
 type templateData struct {
-	Completion      string
-	CurrentYear     int
-	Chats           []*models.Chat
-	Messages        []*models.Message
-	GeoData         map[string]interface{}
-	Form            any
-	Flash           string
-	IsAuthenticated bool
-	CSRFToken       string
-	Localizer       *i18n.Localizer
+	Completion        string
+	CurrentYear       int
+	Chats             []*models.Chat
+	Messages          []*models.Message
+	GeoData           string
+	Form              any
+	Flash             string
+	IsAuthenticated   bool
+	CSRFToken         string
+	Localizer         *i18n.Localizer
+	Projects          []*models.Project
+	Project           *models.Project
+	ProjectDatabase   *models.ProjectDatabase
+	ProjectSchemas    []string
+	SchemaList        []string
+	RegisteredSchemas []RegisteredSchema
+	Files             []*models.File
+	HasDocuments      bool
+	UserID            string // Added UserID field
 }
 
 func humanDate(t time.Time) string {
@@ -30,8 +40,62 @@ func humanDate(t time.Time) string {
 	return t.UTC().Format("02 Jan 2006 at 15:04")
 }
 
+// Check if a value exists in a slice of strings
+func contains(slice []string, value string) bool {
+	for _, item := range slice {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}
+
 var functions = template.FuncMap{
-	"humanDate": humanDate,
+	"humanDate":        humanDate,
+	"formatFileSize":   formatFileSize,
+	"roleBadgeClass":   roleBadgeClass,
+	"statusBadgeClass": statusBadgeClass,
+	"contains":         contains,
+}
+
+// Role badge helper function
+func roleBadgeClass(role string) string {
+	switch role {
+	case "CONTENT":
+		return "badge badge-primary"
+	case "METADATA":
+		return "badge badge-secondary"
+	case "SCHEMA":
+		return "badge badge-accent"
+	default:
+		return "badge badge-ghost"
+	}
+}
+
+// Status badge helper function
+func statusBadgeClass(status string) string {
+	switch status {
+	case "processed":
+		return "badge badge-success"
+	case "uploaded":
+		return "badge badge-info"
+	case "error":
+		return "badge badge-error"
+	default:
+		return "badge badge-warning"
+	}
+}
+
+// Add this function
+func formatFileSize(size int64) string {
+	if size < 1024 {
+		return fmt.Sprintf("%d B", size)
+	} else if size < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(size)/1024)
+	} else if size < 1024*1024*1024 {
+		return fmt.Sprintf("%.1f MB", float64(size)/(1024*1024))
+	}
+	return fmt.Sprintf("%.1f GB", float64(size)/(1024*1024*1024))
 }
 
 // List of templates that should use the auth_base.tmpl.html instead of base.tmpl.html
@@ -50,10 +114,10 @@ func newTemplateCache() (map[string]*template.Template, error) {
 
 	for _, page := range pages {
 		name := filepath.Base(page)
-		
+
 		// Determine which base template to use
 		var ts *template.Template
-		
+
 		if authTemplates[name] {
 			// For authentication pages, use auth_base.tmpl.html
 			ts, err = template.New(name).Funcs(functions).ParseFiles("./ui/html/auth_base.tmpl.html")
@@ -61,7 +125,7 @@ func newTemplateCache() (map[string]*template.Template, error) {
 			// For regular pages, use the standard base.tmpl.html
 			ts, err = template.New(name).Funcs(functions).ParseFiles("./ui/html/base.tmpl.html")
 		}
-		
+
 		if err != nil {
 			return nil, err
 		}
