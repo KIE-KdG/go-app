@@ -1,5 +1,5 @@
 {{define "chat_messages"}}
-<div id="chatMessages" class="flex-1 flex flex-col gap-3 px-4 pt-1 overflow-auto" @scroll="checkScroll()">
+<div class="flex flex-col gap-3 px-4 pt-1">
   {{range .Messages}}
   {{/* Compute background class based on sender type */}}
   {{ $bgClass := "" }}
@@ -17,7 +17,7 @@
   {{end}}
   <template x-for="(message, index) in messages" :key="index">
     <div class="chat-message p-2 rounded shadow-md text-black dark:text-white"
-      :class="{'bg-blue-100 dark:bg-blue-900': message.sender === 'You', 'bg-green-100 dark:bg-green-900': message.sender=== 'AI'}">
+      :class="{'bg-blue-100 dark:bg-blue-900': message.sender === 'You', 'bg-green-100 dark:bg-green-900': message.sender === 'AI'}">
       <div class="sender font-bold" x-html="message.sender"></div>
 
       <!-- AI Response Block -->
@@ -33,7 +33,7 @@
             <div class="text-sm text-blue-600 dark:text-blue-400"
               x-text="message.statusUpdates[message.statusUpdates.length - 1]"></div>
 
-            <!-- Modified dropdown to be wider -->
+            <!-- Status updates dropdown -->
             <details class="dropdown mt-1" x-show="message.statusUpdates.length > 1">
               <summary class="cursor-pointer text-xs text-blue-600 dark:text-blue-400">View all status updates
               </summary>
@@ -49,12 +49,12 @@
           <div x-show="message.answer" class="markdown-content text-black dark:text-white"
             x-html="formatMarkdown(message.answer)"></div>
           
-          <!-- Map toggle button - only show if there's GeoJSON data -->
-          <div x-show="message.geoJSON" class="mt-3 mb-2 flex justify-between items-center">
+          <!-- Map button - only show if there's valid GeoJSON data -->
+          <div x-show="message.geoJSON && typeof message.geoJSON === 'object' && message.geoJSON !== null" 
+               class="mt-3 mb-2">
             <button 
-              @click="toggleMapForMessage(index)"
+              @click="showMessageGeoJSON(index, message.geoJSON, message.answer || '')"
               class="btn btn-sm btn-outline flex items-center gap-1 rounded-md"
-              :class="{'btn-primary': message.showMap}"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -62,54 +62,8 @@
                 <circle cx="8.5" cy="8.5" r="1.5"></circle>
                 <polyline points="21 15 16 10 5 21"></polyline>
               </svg>
-              <span x-text="message.showMap ? 'Hide Map' : 'Show Map'"></span>
+              <span>Show on Map</span>
             </button>
-            
-            <!-- Full-screen button - only show if map is visible -->
-            <button 
-              x-show="message.showMap"
-              @click="openMapFullscreen(message.geoJSON, index)"
-              class="btn btn-sm btn-outline flex items-center gap-1 rounded-md"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="15 3 21 3 21 9"></polyline>
-                <polyline points="9 21 3 21 3 15"></polyline>
-                <line x1="21" y1="3" x2="14" y2="10"></line>
-                <line x1="3" y1="21" x2="10" y2="14"></line>
-              </svg>
-              <span>Fullscreen</span>
-            </button>
-          </div>
-          
-          <!-- Inline map display -->
-          <div x-show="message.geoJSON && message.showMap" class="mt-2 mb-4">
-            <div class="relative rounded-lg shadow-md overflow-hidden" style="height: 400px;">
-              <!-- Map container -->
-              <div :id="'map-' + index" class="w-full h-full"></div>
-              
-              <!-- Map controls at the bottom -->
-              <div class="absolute bottom-0 left-0 right-0 p-2 bg-white bg-opacity-75 dark:bg-gray-800 dark:bg-opacity-75 flex flex-wrap justify-between items-center">
-                <div class="flex items-center space-x-2">
-                  <label class="text-xs font-medium">Style:</label>
-                  <select @change="changeMapStyle($event.target.value, 'map-' + index)" 
-                          class="select select-xs select-bordered rounded py-0 h-6">
-                    <option value="osm">OpenStreetMap</option>
-                    <option value="satellite">Satellite</option>
-                    <option value="topo">Topographic</option>
-                  </select>
-                </div>
-                
-                <div class="text-xs">
-                  <span x-show="getMapFeatureCount(message.geoJSON)">
-                    <span x-text="getMapFeatureCount(message.geoJSON)"></span> features
-                  </span>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Initialize map when shown -->
-            <div x-init="$nextTick(() => initInlineMap('map-' + index, message.geoJSON))"></div>
           </div>
         </div>
       </template>
@@ -120,58 +74,5 @@
       </template>
     </div>
   </template>
-</div>
-
-<!-- Fullscreen map modal -->
-<div x-show="isFullscreenMapOpen" 
-     class="fixed inset-0 z-50 bg-black bg-opacity-75 flex items-center justify-center"
-     x-transition:enter="transition ease-out duration-300"
-     x-transition:enter-start="opacity-0"
-     x-transition:enter-end="opacity-100"
-     x-transition:leave="transition ease-in duration-200"
-     x-transition:leave-start="opacity-100"
-     x-transition:leave-end="opacity-0">
-  
-  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-11/12 h-5/6 max-w-6xl flex flex-col">
-    <!-- Modal header -->
-    <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-      <h3 class="text-lg font-bold">Map Visualization</h3>
-      <button @click="closeFullscreenMap" class="p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-600">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-    </div>
-    
-    <!-- Modal body with map -->
-    <div class="flex-1 relative">
-      <div id="fullscreen-map" class="absolute inset-0"></div>
-    </div>
-    
-    <!-- Modal footer with controls -->
-    <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex flex-wrap justify-between items-center">
-      <div class="flex items-center space-x-4">
-        <div class="flex items-center space-x-2">
-          <label class="text-sm font-medium">Map Style:</label>
-          <select @change="changeMapStyle($event.target.value, 'fullscreen-map')" 
-                  class="select select-sm select-bordered rounded">
-            <option value="osm">OpenStreetMap</option>
-            <option value="satellite">Satellite</option>
-            <option value="topo">Topographic</option>
-          </select>
-        </div>
-        
-        <div x-show="getMapFeatureCount(fullscreenMapData)">
-          <span class="text-sm">
-            <span x-text="getMapFeatureCount(fullscreenMapData)"></span> features
-          </span>
-        </div>
-      </div>
-      
-      <button @click="closeFullscreenMap" class="btn btn-sm btn-primary">Close</button>
-    </div>
-  </div>
 </div>
 {{end}}

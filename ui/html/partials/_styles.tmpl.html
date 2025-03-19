@@ -10,17 +10,34 @@
   crossorigin=""></script>
 
 <style>
-  /* Animations for map panel */
-  @keyframes slide-in {
-    from { transform: translateX(100%); }
-    to { transform: translateX(0); }
+  /* Layout transitions */
+  .transition-all {
+    transition: all 0.3s ease-in-out;
   }
   
-  .animate-slide-in {
-    animation: slide-in 0.3s ease-out;
+  /* Container width constraints */
+  .max-w-3xl {
+    max-width: 48rem;
+  }
+
+  /* Map panel styling */
+  .w-96 {
+    width: 24rem;
   }
   
-  /* Ensure Leaflet is styled properly */
+  /* Fix z-index for fixed position map panel */
+  .fixed {
+    z-index: 40;
+  }
+  
+  /* For mobile screens */
+  @media (max-width: 768px) {
+    .w-96 {
+      width: 100%;
+    }
+  }
+  
+  /* Main map container styles */
   #main-map-container {
     min-height: 300px;
     height: 100%;
@@ -28,43 +45,46 @@
     z-index: 1;
   }
   
-  [class*="map-thumb-"] {
-    min-height: 100%;
+  /* Map thumbnail styles */
+  [id^="map-thumb-"] {
+    height: 100%;
+    width: 100%;
   }
   
-  /* Remove leaflet attribution from thumbnails */
-  .leaflet-control-attribution {
+  /* Make sure markers and popups are visible */
+  .leaflet-marker-icon,
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-tip {
+    visibility: visible !important;
+  }
+  
+  /* Override z-index for map controls */
+  .leaflet-top, .leaflet-bottom {
+    z-index: 900 !important;
+  }
+  
+  /* Fix some common leaflet issues in dark mode */
+  .dark .leaflet-popup-content-wrapper,
+  .dark .leaflet-popup-tip {
+    background-color: #2d3748 !important;
+    color: #e2e8f0 !important;
+  }
+  
+  .dark .leaflet-container {
+    background-color: #1a202c;
+  }
+  
+  /* Hide leaflet attribution on thumbnails */
+  [id^="map-thumb-"] .leaflet-control-attribution {
     display: none;
   }
   
-  /* Leaflet marker and control styles need specificity to override Leaflet defaults */
-  .leaflet-marker-icon {
-    visibility: visible !important;
+  /* Chat message styles */
+  .chat-message {
+    max-width: 100%;
+    word-wrap: break-word;
   }
-  
-  .leaflet-control-zoom {
-    visibility: visible !important;
-  }
-  
-  /* Fix any potential z-index issues with map controls */
-  .leaflet-top, .leaflet-bottom {
-    z-index: 400 !important;
-  }
-  
-  /* Transition for layout changes */
-  .flex-1 {
-    transition: width 0.3s ease-out;
-  }
-  
-  /* Thumbnail style hover effects */
-  [id^="map-thumb-"] {
-    transition: transform 0.2s ease;
-  }
-  
-  [id^="map-thumb-"]:hover {
-    transform: scale(1.05);
-  }
-  
+
   /* Markdown content styling */
   .markdown-content h1 {
     font-size: 1.8em;
@@ -178,10 +198,25 @@
     border-color: #4a5568;
   }
   
-  /* Make sure the mobile messages display stays on top of map in mobile view */
+  /* Media query for responsive design */
   @media (max-width: 768px) {
     #chatMessages {
       z-index: 5;
+    }
+    
+    /* Make map panel fullscreen on mobile */
+    [x-show="mapVisible && hasMap"] {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      z-index: 1000 !important;
+      width: 100% !important;
+      height: 100% !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border: none !important;
     }
   }
 </style>

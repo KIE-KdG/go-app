@@ -54,6 +54,7 @@ func PermittedInt(value int, permittedValues ...int) bool {
 	return false
 }
 
+
 func MinChars(value string, n int) bool {
 	return utf8.RuneCountInString(value) >= n
 }

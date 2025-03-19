@@ -1,114 +1,161 @@
+// models/projects.go
 package models
 
 import (
 	"database/sql"
+	"errors"
 	"time"
+
+	"github.com/google/uuid"
 )
 
-// Project represents a project with an optional creation date.
 type Project struct {
-    ID           string     `db:"id" json:"id"`
-    Name         string     `db:"name" json:"name"`
-    CreationDate *time.Time `db:"creation_date" json:"creation_date"`
-}
-
-// UserMetadata represents metadata for a user.
-type UserMetadata struct {
-    ID   string `db:"id" json:"id"`
-    Name string `db:"name" json:"name"`
-    Role string `db:"role" json:"role"`
-}
-
-// DatabaseMetadata contains metadata about a database connection.
-type DatabaseMetadata struct {
-    ID               string `db:"id" json:"id"`
-    SourceConnString string `db:"source_conn_string" json:"source_conn_string"`
-    DBType           string `db:"db_type" json:"db_type"`
-    ProjectID        string `db:"project_id" json:"project_id"`
-}
-
-// Rule represents a rule with an optional integer ID.
-type Rule struct {
-    ID          *int   `db:"id" json:"id"`
-    Description string `db:"description" json:"description"`
-    RuleType    string `db:"rule_type" json:"rule_type"`
-    ProjectID   string `db:"project_id" json:"project_id"`
-}
-
-// TableMetadata represents metadata for a table.
-type TableMetadata struct {
-    ID          string `db:"id" json:"id"`
-    Schema      string `db:"schema" json:"schema"`
-    TableName   string `db:"table_name" json:"table_name"`
-    Description string `db:"description" json:"description"`
-    DatabaseID  string `db:"database_id" json:"database_id"`
-}
-
-// ColumnMetadata represents metadata for a column.
-type ColumnMetadata struct {
-    ID          string `db:"id" json:"id"`
-    Name        string `db:"name" json:"name"`
-    DataType    string `db:"datatype" json:"datatype"`
-    Description string `db:"description" json:"description"`
-    TableID     string `db:"table_id" json:"table_id"`
+	ID             uuid.UUID
+	Name           string
+	Description    string
+	UserID         uuid.UUID
+	ExternalID     string
+	Created        time.Time
+	Updated        time.Time
+	DocumentCount  int
 }
 
 type ProjectModel struct {
-		DB *sql.DB
+	DB *sql.DB
 }
 
-func (m *ProjectModel) Insert(name string) error {
-	stmt := `INSERT INTO projects (name, creation_date) VALUES(?, datetime('now'))`
-
-	statement, err := m.DB.Prepare(stmt)
-	if err != nil {
-		return err
-	}
-
-	_, err = statement.Exec(name)
-	if err != nil {
-		return err
-	}
-
-	return nil
+func NewProjectModel(db *sql.DB) *ProjectModel {
+	return &ProjectModel{DB: db}
 }
 
-func (m *ProjectModel) Get(id string) (*Project, error) {
-	stmt := `SELECT id, name, creation_date FROM projects WHERE id = ?`
+func (m *ProjectModel) Insert(name, description string, userID uuid.UUID) (uuid.UUID, error) {
+	var projectID uuid.UUID
+	
+	stmt := `
+        INSERT INTO projects (name, description, user_id, created, updated)
+        VALUES ($1, $2, $3, NOW(), NOW())
+        RETURNING id
+    `
+	
+	err := m.DB.QueryRow(stmt, name, description, userID).Scan(&projectID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	
+	// After creating the project, link it to the user in users_projects
+	linkStmt := `
+        INSERT INTO users_projects (user_id, project_id)
+        VALUES ($1, $2)
+        ON CONFLICT DO NOTHING
+    `
+	
+	_, err = m.DB.Exec(linkStmt, userID, projectID)
+	if err != nil {
+		// Log but don't fail if linking fails
+		return projectID, err
+	}
+	
+	return projectID, nil
+}
 
-	row := m.DB.QueryRow(stmt, id)
+func (m *ProjectModel) Get(id uuid.UUID) (*Project, error) {
+	stmt := `
+        SELECT p.id, p.name,
+               (SELECT COUNT(*) FROM files_projects fp WHERE fp.project_id = p.id) AS document_count
+        FROM projects p
+        WHERE p.id = $1
+    `
+	
+	var project Project
+	
+	err := m.DB.QueryRow(stmt, id).Scan(
+		&project.ID,
+		&project.Name,
+		&project.DocumentCount,
+	)
+	
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNoRecord
+		}
+		return nil, err
+	}
+	
+	return &project, nil
+}
 
-	project := &Project{}
-
-	err := row.Scan(&project.ID, &project.Name, &project.CreationDate)
+func (m *ProjectModel) GetByUserID(userID uuid.UUID) ([]*Project, error) {
+	stmt := `
+        SELECT p.id, p.name,
+               (SELECT COUNT(*) FROM files_projects fp WHERE fp.project_id = p.id) AS document_count
+        FROM projects p
+        JOIN users_projects up ON p.id = up.project_id
+        WHERE up.user_id = $1
+    `
+	
+	rows, err := m.DB.Query(stmt, userID)
 	if err != nil {
 		return nil, err
 	}
-
-	return project, nil
+	defer rows.Close()
+	
+	projects := []*Project{}
+	
+	for rows.Next() {
+		var project Project
+		
+		err := rows.Scan(
+			&project.ID,
+			&project.Name,
+			&project.DocumentCount,
+		)
+		if err != nil {
+			return nil, err
+		}
+		
+		projects = append(projects, &project)
+	}
+	
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	
+	return projects, nil
 }
 
 func (m *ProjectModel) GetAll() ([]*Project, error) {
-	stmt := `SELECT id, name, creation_date FROM projects`
-
+	stmt := `
+        SELECT p.id, p.name,
+               (SELECT COUNT(*) FROM files_projects fp WHERE fp.project_id = p.id) AS document_count
+        FROM projects p
+    `
+	
 	rows, err := m.DB.Query(stmt)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
+	
 	projects := []*Project{}
-
+	
 	for rows.Next() {
-		project := &Project{}
-
-		err := rows.Scan(&project.ID, &project.Name, &project.CreationDate)
+		var project Project
+		
+		err := rows.Scan(
+			&project.ID,
+			&project.Name,
+			&project.DocumentCount,
+		)
 		if err != nil {
 			return nil, err
 		}
-
-		projects = append(projects, project)
+		
+		projects = append(projects, &project)
 	}
-
+	
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	
 	return projects, nil
 }
