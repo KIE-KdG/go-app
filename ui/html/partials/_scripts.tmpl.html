@@ -1,11 +1,4 @@
-// Check scroll position to show/hide scroll button
-checkScroll() {
-const chatMessages = document.getElementById('chatMessages');
-if (chatMessages) {
-// Show button if user has scrolled up at least 200px from bottom
-this.showScrollButton = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight > 200;
-}
-},{{define "scripts"}}
+{{define "scripts"}}
 <script>
   // Load marked.js for Markdown rendering
   if (!window.marked) {
@@ -83,7 +76,7 @@ this.showScrollButton = chatMessages.scrollHeight - chatMessages.scrollTop - cha
               }
             });
 
-            // Add a watcher for mapVisible changes (new code)
+            // Add a watcher for mapVisible changes
             this.$watch('mapVisible', (visible) => {
               if (visible && this.mapInstance) {
                 setTimeout(() => {
@@ -91,6 +84,8 @@ this.showScrollButton = chatMessages.scrollHeight - chatMessages.scrollTop - cha
                 }, 300);
               }
             });
+            
+            // Alpine watchers for other state changes
           }, 200);
         });
       },
@@ -514,7 +509,7 @@ this.showScrollButton = chatMessages.scrollHeight - chatMessages.scrollTop - cha
 
       connectWebSocket() {
         const chatID = window.location.pathname.split("/")[2];
-        this.ws = new WebSocket(`wss://localhost:4000/ws/chat/${chatID}`);
+        this.ws = new WebSocket(`wss://${window.location.host}/ws/chat/${chatID}`);
 
         this.ws.addEventListener('open', () => {
           console.log('WebSocket connection established');
@@ -624,55 +619,23 @@ this.showScrollButton = chatMessages.scrollHeight - chatMessages.scrollTop - cha
         this.selectedProjectId = projectId;
         this.selectedProjectName = projectName || 'No Project';
       },
-
-      init() {
-        // Initialize WebSocket
-        this.connectWebSocket();
-
-        // Track window width for responsive design
-        this.checkWindowSize = () => {
-          this.isLargeScreen = window.innerWidth >= 1024;
-        };
-
-        // Set up event listeners and initialize UI
-        this.$nextTick(() => {
-          this.scrollToBottom();
-          this.autoResizeTextarea();
-          this.checkWindowSize();
-
-          // Initialize main map once DOM is loaded
-          setTimeout(() => {
-            this.initializeMainMap();
-
-            // Listen for resize events to refresh maps and check screen size
-            window.addEventListener('resize', () => {
-              this.refreshMap();
-              this.checkWindowSize();
-            });
-
-            // Listen for toggle-map event
-            this.$el.addEventListener('toggle-map', () => {
-              this.mapVisible = !this.mapVisible;
-
-              // Give the map a moment to render then refresh it
-              if (this.mapVisible && this.mapInstance) {
-                setTimeout(() => {
-                  this.mapInstance.invalidateSize();
-                }, 300);
-              }
-            });
-
-            // Add a watcher for mapVisible changes
-            this.$watch('mapVisible', (visible) => {
-              if (visible && this.mapInstance) {
-                setTimeout(() => {
-                  this.mapInstance.invalidateSize();
-                }, 300);
-              }
-            });
-          }, 200);
-        });
+      
+      // Toggle DB button - mutually exclusive with Docs
+      toggleDbButton() {
+        this.dbUsed = !this.dbUsed;
+        if (this.dbUsed) {
+          this.docsUsed = false;
+        }
       },
+      
+      // Toggle Docs button - mutually exclusive with DB
+      toggleDocsButton() {
+        this.docsUsed = !this.docsUsed;
+        if (this.docsUsed) {
+          this.dbUsed = false;
+        }
+      },
+
       // Interrupt message generation
       interruptGeneration() {
         if (this.ws && this.ws.readyState === WebSocket.OPEN && this.isProcessing) {
