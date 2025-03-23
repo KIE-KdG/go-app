@@ -105,7 +105,7 @@
         }
 
         try {
-            // Create map without setting initial center/zoom
+            // Create map with minimal settings
             const map = L.map('main-map-container', {
                 zoomControl: true
             });
@@ -126,19 +126,31 @@
                 })
             };
 
-            // Add default basemap
-            this.mapTileLayers.osm.addTo(map);
-
             // Define Belgium's bounds (southwest and northeast corners)
             const belgiumBounds = [
                 [49.5, 2.5],  // Southwest corner
                 [51.5, 6.4]   // Northeast corner
             ];
 
-            // Fit the map to Belgium's bounds with some padding
-            map.fitBounds(belgiumBounds, {
-                padding: [30, 30]  // Add 30px padding around the bounds
+            // Add default basemap
+            this.mapTileLayers.osm.addTo(map);
+
+            // Wait for the tile layer to load before fitting bounds
+            this.mapTileLayers.osm.on('load', function() {
+                // Fit the map to Belgium's bounds with padding
+                map.fitBounds(belgiumBounds, {
+                    padding: [30, 30]
+                });
             });
+
+            // Set a fallback in case the 'load' event doesn't fire
+            setTimeout(() => {
+                if (map.getZoom() === undefined || map.getZoom() > 10) {
+                    map.fitBounds(belgiumBounds, {
+                        padding: [30, 30]
+                    });
+                }
+            }, 500);
 
             console.log("Main map initialized successfully");
         } catch (e) {
