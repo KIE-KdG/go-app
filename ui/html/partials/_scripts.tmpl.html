@@ -105,11 +105,10 @@
         }
 
         try {
-            // Create map with a center point in Belgium and modest zoom level
-            // These coordinates are roughly the center of Belgium
+            // Create map with specific center and zoom for Belgium
             const map = L.map('main-map-container', {
-                center: [50.5, 4.5],
-                zoom: 8,  // This zoom level should show most of Belgium
+                center: [50.5, 4.5],  // Center of Belgium
+                zoom: 8,  // Shows most of Belgium
                 zoomControl: true
             });
 
@@ -460,15 +459,23 @@
             }
           }).addTo(map);
 
-          // Fit map to bounds
-          try {
+        // Fit map to bounds of the GeoJSON
+        try {
             const bounds = geoJSONLayer.getBounds();
             if (bounds.isValid()) {
-              map.fitBounds(bounds, { padding: [30, 30] });
+                // Only fit to bounds if it makes sense (not a tiny area)
+                const boundsSize = bounds.getSouthWest().distanceTo(bounds.getNorthEast());
+                // Only zoom if reasonable size, prevents excessive zooming
+                if (boundsSize > 1000) { // 1km minimum size
+                    map.fitBounds(bounds, {
+                        padding: [30, 30],
+                        maxZoom: 16  // Prevents zooming in too far
+                    });
+                }
             }
-          } catch (e) {
+        } catch (e) {
             console.warn("Could not fit to bounds:", e);
-          }
+        }
         } catch (e) {
           console.error("Error adding GeoJSON to map:", e);
         }
