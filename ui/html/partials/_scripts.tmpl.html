@@ -463,19 +463,12 @@
         try {
             const bounds = geoJSONLayer.getBounds();
             if (bounds.isValid()) {
-                // Only fit to bounds if it makes sense (not a tiny area)
-                const boundsSize = bounds.getSouthWest().distanceTo(bounds.getNorthEast());
-                // Only zoom if reasonable size, prevents excessive zooming
-                if (boundsSize > 1000) { // 1km minimum size
-                    map.fitBounds(bounds, {
-                        padding: [100, 100], // Increased padding from 30 to 100
-                        maxZoom: 16  // Prevents zooming in too far
-                    });
-                }
-
-                setTimeout(() => {
-                    map.setZoom(map.getZoom() - 1);
-                }, 100);
+                // Compute an optimal zoom level for your data
+                let computedZoom = map.getBoundsZoom(bounds);
+                // Optionally, constrain the zoom level (e.g., between 8 and 16)
+                computedZoom = Math.max(Math.min(computedZoom, 16), 8);
+                // Always center on Belgium ([50.5, 4.5]) using the computed zoom level
+                map.setView([50.5, 4.5], computedZoom);
             }
         } catch (e) {
             console.warn("Could not fit to bounds:", e);
