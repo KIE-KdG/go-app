@@ -126,31 +126,37 @@
                 })
             };
 
+            // Add default basemap
+            this.mapTileLayers.osm.addTo(map);
+
             // Define Belgium's bounds (southwest and northeast corners)
             const belgiumBounds = [
                 [49.5, 2.5],  // Southwest corner
                 [51.5, 6.4]   // Northeast corner
             ];
 
-            // Add default basemap
-            this.mapTileLayers.osm.addTo(map);
+            // Create a flag to ensure fitBounds is only called once
+            let boundsSet = false;
 
-            // Wait for the tile layer to load before fitting bounds
-            this.mapTileLayers.osm.on('load', function() {
-                // Fit the map to Belgium's bounds with padding
-                map.fitBounds(belgiumBounds, {
-                    padding: [30, 30]
-                });
-            });
-
-            // Set a fallback in case the 'load' event doesn't fire
-            setTimeout(() => {
-                if (map.getZoom() === undefined || map.getZoom() > 10) {
+            // Set initial bounds only once after map is ready
+            const setInitialBounds = () => {
+                if (!boundsSet) {
                     map.fitBounds(belgiumBounds, {
                         padding: [30, 30]
                     });
+                    boundsSet = true;
+
+                    // Remove all event listeners that might trigger fitBounds again
+                    map.off('load');
+                    this.mapTileLayers.osm.off('load');
                 }
-            }, 500);
+            };
+
+            // Try to set bounds when the layer loads
+            this.mapTileLayers.osm.on('load', setInitialBounds);
+
+            // Also set bounds after a short delay as fallback
+            setTimeout(setInitialBounds, 500);
 
             console.log("Main map initialized successfully");
         } catch (e) {
