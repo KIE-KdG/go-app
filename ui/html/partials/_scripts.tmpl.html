@@ -105,8 +105,11 @@
         }
 
         try {
-            // Create map with minimal settings
+            // Create map with a center point in Belgium and modest zoom level
+            // These coordinates are roughly the center of Belgium
             const map = L.map('main-map-container', {
+                center: [50.5, 4.5],
+                zoom: 8,  // This zoom level should show most of Belgium
                 zoomControl: true
             });
 
@@ -128,35 +131,6 @@
 
             // Add default basemap
             this.mapTileLayers.osm.addTo(map);
-
-            // Define Belgium's bounds (southwest and northeast corners)
-            const belgiumBounds = [
-                [49.5, 2.5],  // Southwest corner
-                [51.5, 6.4]   // Northeast corner
-            ];
-
-            // Create a flag to ensure fitBounds is only called once
-            let boundsSet = false;
-
-            // Set initial bounds only once after map is ready
-            const setInitialBounds = () => {
-                if (!boundsSet) {
-                    map.fitBounds(belgiumBounds, {
-                        padding: [30, 30]
-                    });
-                    boundsSet = true;
-
-                    // Remove all event listeners that might trigger fitBounds again
-                    map.off('load');
-                    this.mapTileLayers.osm.off('load');
-                }
-            };
-
-            // Try to set bounds when the layer loads
-            this.mapTileLayers.osm.on('load', setInitialBounds);
-
-            // Also set bounds after a short delay as fallback
-            setTimeout(setInitialBounds, 500);
 
             console.log("Main map initialized successfully");
         } catch (e) {
