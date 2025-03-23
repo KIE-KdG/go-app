@@ -90,52 +90,61 @@
         });
       },
 
-      // Initialize the main map with no data yet
-      initializeMainMap() {
+    // Initialize the main map with no data yet
+    initializeMainMap() {
         // Check if we already have a map instance
         if (this.mapInstance) {
-          console.log("Map already initialized, skipping");
-          return;
+            console.log("Map already initialized, skipping");
+            return;
         }
 
         const mapContainer = document.getElementById('main-map-container');
         if (!mapContainer) {
-          console.error("Map container not found");
-          return;
+            console.error("Map container not found");
+            return;
         }
 
         try {
-          // Create map with default view centered on Belgium
-          const map = L.map('main-map-container', {
-            center: [51.05, 3.7],
-            zoom: 4,
-            zoomControl: true
-          });
+            // Create map without setting initial center/zoom
+            const map = L.map('main-map-container', {
+                zoomControl: true
+            });
 
-          // Store reference
-          this.mapInstance = map;
+            // Store reference
+            this.mapInstance = map;
 
-          // Setup basemaps
-          this.mapTileLayers = {
-            osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            }),
-            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-              attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-            }),
-            topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-              attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://opentopomap.org">OpenTopoMap</a>'
-            })
-          };
+            // Setup basemaps
+            this.mapTileLayers = {
+                osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                }),
+                satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                }),
+                topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                    attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://opentopomap.org">OpenTopoMap</a>'
+                })
+            };
 
-          // Add default basemap
-          this.mapTileLayers.osm.addTo(map);
+            // Add default basemap
+            this.mapTileLayers.osm.addTo(map);
 
-          console.log("Main map initialized successfully");
+            // Define Belgium's bounds (southwest and northeast corners)
+            const belgiumBounds = [
+                [49.5, 2.5],  // Southwest corner
+                [51.5, 6.4]   // Northeast corner
+            ];
+
+            // Fit the map to Belgium's bounds with some padding
+            map.fitBounds(belgiumBounds, {
+                padding: [30, 30]  // Add 30px padding around the bounds
+            });
+
+            console.log("Main map initialized successfully");
         } catch (e) {
-          console.error("Error initializing main map:", e);
+            console.error("Error initializing main map:", e);
         }
-      },
+    },
 
       // Refresh map size when container dimensions change
       refreshMap() {
