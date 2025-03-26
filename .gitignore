@@ -26,6 +26,7 @@ node_modules
 
 # env file
 .env
+tls/
 
 #sqlite
 data/sqlite_lab.db
